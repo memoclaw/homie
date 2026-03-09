@@ -1,0 +1,11 @@
+{
+  "name": "@homie/telegram",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@homie/core": "workspace:*",
+    "@homie/observability": "workspace:*",
+    "grammy": "^1.35.0"
+  }
+}

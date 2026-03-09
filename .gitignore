@@ -1,0 +1,9 @@
+node_modules/
+data/
+workspace/
+.env
+*.db
+*.db-wal
+*.db-shm
+bun.lock
+dist/

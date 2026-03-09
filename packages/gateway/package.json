@@ -1,0 +1,13 @@
+{
+  "name": "@homie/gateway",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@homie/core": "workspace:*",
+    "@homie/persistence": "workspace:*",
+    "@homie/sessions": "workspace:*",
+    "@homie/agent": "workspace:*",
+    "@homie/observability": "workspace:*"
+  }
+}

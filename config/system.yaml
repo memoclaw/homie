@@ -1,0 +1,20 @@
+app:
+  logLevel: info
+  dataDir: ./data
+
+# Telegram (required)
+telegram:
+  botToken: ${TELEGRAM_BOT_TOKEN}
+  allowedChatIds: []
+
+# Claude Code provider
+provider:
+  model: ""
+  extraArgs: []
+
+agent:
+  maxHistoryMessages: 20
+
+memory:
+  enabled: true
+  maxContextMemories: 50
