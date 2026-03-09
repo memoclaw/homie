@@ -24,8 +24,8 @@ describe('buildMessages', () => {
     });
 
     expect(messages.length).toBe(2);
-    expect(messages[0]!.role).toBe('system');
-    expect(messages[0]!.content).toContain('Homie');
+    expect(messages[0]?.role).toBe('system');
+    expect(messages[0]?.content).toContain('Homie');
     expect(messages[1]).toEqual({ role: 'user', content: 'hello' });
   });
 
@@ -89,7 +89,7 @@ describe('buildMessages', () => {
       memories,
     });
 
-    expect(messages[0]!.content).toContain('User prefers TypeScript');
-    expect(messages[0]!.content).toContain('Memories:');
+    expect(messages[0]?.content).toContain('User prefers TypeScript');
+    expect(messages[0]?.content).toContain('Memories:');
   });
 });

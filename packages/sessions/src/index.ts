@@ -1,1 +1,1 @@
-export { type SessionManager, createSessionManager } from './session-manager';
+export { createSessionManager, type SessionManager } from './session-manager';

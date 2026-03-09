@@ -1,10 +1,10 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { createAgent } from '@homie/agent';
 import type { ChatMessageEvent, CommandEvent, ProviderAdapter } from '@homie/core';
 import { schema } from '@homie/persistence/src/migrations';
 import { createSessionStore } from '@homie/persistence/src/session-store';
 import { createUsageStore } from '@homie/persistence/src/usage-store';
-import { createAgent } from '@homie/agent';
 import { createSessionManager } from '@homie/sessions';
 import { createGateway } from './gateway';
 
@@ -19,7 +19,13 @@ function createMockProvider(response = 'test response'): ProviderAdapter {
   return {
     generate: mock(async () => ({
       content: response,
-      usage: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheCreateTokens: 0, costUsd: 0.001 },
+      usage: {
+        inputTokens: 10,
+        outputTokens: 5,
+        cacheReadTokens: 0,
+        cacheCreateTokens: 0,
+        costUsd: 0.001,
+      },
     })),
   };
 }

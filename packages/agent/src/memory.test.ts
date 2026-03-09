@@ -21,8 +21,8 @@ describe('parseMemoryTags', () => {
       'Sure! <memory>Project uses Bun</memory> And <memory>No classes, only factories</memory> noted.',
     );
     expect(result.memories).toHaveLength(2);
-    expect(result.memories[0]!.content).toBe('Project uses Bun');
-    expect(result.memories[1]!.content).toBe('No classes, only factories');
+    expect(result.memories[0]?.content).toBe('Project uses Bun');
+    expect(result.memories[1]?.content).toBe('No classes, only factories');
   });
 
   test('handles multiline memory content', () => {
@@ -30,8 +30,8 @@ describe('parseMemoryTags', () => {
       'OK.\n<memory>\nUser preferences:\n- dark mode\n- vim keybindings\n</memory>\nDone.',
     );
     expect(result.memories).toHaveLength(1);
-    expect(result.memories[0]!.content).toContain('dark mode');
-    expect(result.memories[0]!.content).toContain('vim keybindings');
+    expect(result.memories[0]?.content).toContain('dark mode');
+    expect(result.memories[0]?.content).toContain('vim keybindings');
   });
 
   test('skips empty memory tags', () => {

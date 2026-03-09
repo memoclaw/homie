@@ -157,9 +157,7 @@ export function createTelegramAdapter(opts: {
         });
         return;
       } catch (err) {
-        throw new ChannelError(
-          `Failed to send Telegram message: ${getErrorMessage(err)}`,
-        );
+        throw new ChannelError(`Failed to send Telegram message: ${getErrorMessage(err)}`);
       }
     }
 
@@ -172,9 +170,7 @@ export function createTelegramAdapter(opts: {
       try {
         await bot.api.sendMessage(target.chatId, text);
       } catch (err) {
-        throw new ChannelError(
-          `Failed to send Telegram message: ${getErrorMessage(err)}`,
-        );
+        throw new ChannelError(`Failed to send Telegram message: ${getErrorMessage(err)}`);
       }
     }
   }

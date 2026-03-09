@@ -45,21 +45,21 @@ describe('SessionManager', () => {
       expect(session.name).toBe('my-project');
 
       const active = await manager.getActiveSession('telegram', 'chat1');
-      expect(active!.id).toBe(session.id);
+      expect(active?.id).toBe(session.id);
     });
 
     test('rejects duplicate name', async () => {
       await manager.createNamedSession('telegram', 'chat1', 'dupe');
-      expect(
-        manager.createNamedSession('telegram', 'chat1', 'dupe'),
-      ).rejects.toThrow('already exists');
+      expect(manager.createNamedSession('telegram', 'chat1', 'dupe')).rejects.toThrow(
+        'already exists',
+      );
     });
   });
 
   describe('switchSession', () => {
     test('switch by name', async () => {
       await manager.resolveSession('telegram', 'chat1');
-      const s2 = await manager.createNamedSession('telegram', 'chat1', 'other');
+      const _s2 = await manager.createNamedSession('telegram', 'chat1', 'other');
 
       // Currently active is 'other' (createNamedSession sets active)
       // Switch back to default
@@ -79,9 +79,9 @@ describe('SessionManager', () => {
     });
 
     test('throws for unknown session', async () => {
-      expect(
-        manager.switchSession('telegram', 'chat1', 'nonexistent'),
-      ).rejects.toThrow('No session');
+      expect(manager.switchSession('telegram', 'chat1', 'nonexistent')).rejects.toThrow(
+        'No session',
+      );
     });
   });
 
@@ -94,8 +94,8 @@ describe('SessionManager', () => {
 
       const history = await manager.getHistory(session.id, 10);
       expect(history.length).toBe(2);
-      expect(history[0]!.text).toBe('hello');
-      expect(history[1]!.text).toBe('hi there');
+      expect(history[0]?.text).toBe('hello');
+      expect(history[1]?.text).toBe('hi there');
     });
   });
 
@@ -105,11 +105,11 @@ describe('SessionManager', () => {
 
       await manager.setProcessing(session.id);
       let updated = await manager.getSession(session.id);
-      expect(updated!.status).toBe('processing');
+      expect(updated?.status).toBe('processing');
 
       await manager.setIdle(session.id);
       updated = await manager.getSession(session.id);
-      expect(updated!.status).toBe('idle');
+      expect(updated?.status).toBe('idle');
     });
   });
 
@@ -136,7 +136,7 @@ describe('SessionManager', () => {
       expect(count).toBe(1);
 
       const updated = await manager.getSession(s1.id);
-      expect(updated!.status).toBe('idle');
+      expect(updated?.status).toBe('idle');
     });
   });
 

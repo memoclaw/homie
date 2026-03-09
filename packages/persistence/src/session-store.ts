@@ -111,11 +111,9 @@ export function createSessionStore(db: Database): SessionStore {
     },
 
     async setTitle(sessionId, title) {
-      db.prepare('UPDATE sessions SET title = ?, updated_at = ? WHERE id = ? AND title IS NULL').run(
-        title,
-        new Date().toISOString(),
-        sessionId,
-      );
+      db.prepare(
+        'UPDATE sessions SET title = ?, updated_at = ? WHERE id = ? AND title IS NULL',
+      ).run(title, new Date().toISOString(), sessionId);
     },
 
     async resetStuckSessions() {

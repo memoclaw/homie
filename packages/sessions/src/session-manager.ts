@@ -5,11 +5,22 @@ const log = createLogger('sessions');
 
 export interface SessionManager {
   resolveSession(channel: string, chatId: string, userId?: string | null): Promise<Session>;
-  createNamedSession(channel: string, chatId: string, name: string, userId?: string | null): Promise<Session>;
+  createNamedSession(
+    channel: string,
+    chatId: string,
+    name: string,
+    userId?: string | null,
+  ): Promise<Session>;
   switchSession(channel: string, chatId: string, nameOrId: string): Promise<Session>;
   listSessions(channel: string, chatId: string): Promise<Session[]>;
   getActiveSession(channel: string, chatId: string): Promise<Session | null>;
-  addMessage(sessionId: string, direction: Message['direction'], text: string, rawSourceId?: string | null, metadata?: Record<string, unknown>): Promise<Message>;
+  addMessage(
+    sessionId: string,
+    direction: Message['direction'],
+    text: string,
+    rawSourceId?: string | null,
+    metadata?: Record<string, unknown>,
+  ): Promise<Message>;
   getHistory(sessionId: string, limit: number): Promise<Message[]>;
   getSession(sessionId: string): Promise<Session | null>;
   resetSession(channel: string, chatId: string): Promise<string | null>;

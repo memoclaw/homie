@@ -1,5 +1,10 @@
 export { openDatabase } from './database';
-export { type KvStore, createKvStore } from './kv-store';
-export { type MemoryEntry, type MemoryStore, createMemoryStore } from './memory-store';
+export { createKvStore, type KvStore } from './kv-store';
+export { createMemoryStore, type MemoryEntry, type MemoryStore } from './memory-store';
 export { createSessionStore } from './session-store';
-export { type UsageRecord, type UsageSummary, type UsageStore, createUsageStore } from './usage-store';
+export {
+  createUsageStore,
+  type UsageRecord,
+  type UsageStore,
+  type UsageSummary,
+} from './usage-store';

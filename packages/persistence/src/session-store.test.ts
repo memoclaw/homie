@@ -66,7 +66,7 @@ describe('SessionStore', () => {
       await store.createSession('telegram', 'chat1', 'my-project');
       const found = await store.getSessionByName('telegram', 'chat1', 'my-project');
       expect(found).not.toBeNull();
-      expect(found!.name).toBe('my-project');
+      expect(found?.name).toBe('my-project');
     });
 
     test('getSessionByName returns null for unknown', async () => {
@@ -82,7 +82,7 @@ describe('SessionStore', () => {
 
       const active = await store.getActiveSession('telegram', 'chat1');
       expect(active).not.toBeNull();
-      expect(active!.id).toBe(session.id);
+      expect(active?.id).toBe(session.id);
     });
 
     test('switching active session', async () => {
@@ -93,7 +93,7 @@ describe('SessionStore', () => {
       await store.setActiveSession('telegram', 'chat1', s2.id);
 
       const active = await store.getActiveSession('telegram', 'chat1');
-      expect(active!.id).toBe(s2.id);
+      expect(active?.id).toBe(s2.id);
     });
   });
 
@@ -115,9 +115,9 @@ describe('SessionStore', () => {
       const messages = await store.listRecentMessages(session.id, 10);
 
       expect(messages.length).toBe(1);
-      expect(messages[0]!.text).toBe('hello');
-      expect(messages[0]!.direction).toBe('in');
-      expect(messages[0]!.metadata).toEqual({ foo: 'bar' });
+      expect(messages[0]?.text).toBe('hello');
+      expect(messages[0]?.direction).toBe('in');
+      expect(messages[0]?.metadata).toEqual({ foo: 'bar' });
     });
 
     test('listRecentMessages respects limit and order', async () => {
@@ -138,9 +138,9 @@ describe('SessionStore', () => {
       const messages = await store.listRecentMessages(session.id, 3);
       expect(messages.length).toBe(3);
       // Should be the most recent 3, in chronological order
-      expect(messages[0]!.text).toBe('msg-2');
-      expect(messages[1]!.text).toBe('msg-3');
-      expect(messages[2]!.text).toBe('msg-4');
+      expect(messages[0]?.text).toBe('msg-2');
+      expect(messages[1]?.text).toBe('msg-3');
+      expect(messages[2]?.text).toBe('msg-4');
     });
   });
 
@@ -151,7 +151,7 @@ describe('SessionStore', () => {
 
       await store.setSessionStatus(session.id, 'processing');
       const updated = await store.getById(session.id);
-      expect(updated!.status).toBe('processing');
+      expect(updated?.status).toBe('processing');
     });
 
     test('resetStuckSessions resets processing to idle', async () => {
@@ -165,7 +165,7 @@ describe('SessionStore', () => {
       expect(count).toBe(2);
 
       const updated = await store.getById(s1.id);
-      expect(updated!.status).toBe('idle');
+      expect(updated?.status).toBe('idle');
     });
   });
 
@@ -202,7 +202,7 @@ describe('SessionStore', () => {
 
       await store.setTitle(session.id, 'My Chat');
       const updated = await store.getById(session.id);
-      expect(updated!.title).toBe('My Chat');
+      expect(updated?.title).toBe('My Chat');
     });
   });
 

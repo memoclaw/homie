@@ -1,9 +1,9 @@
+import type { ProgressHandler, ReplyFn } from '@homie/core';
 import { getErrorMessage } from '@homie/core';
 import type { MemoryStore, UsageStore } from '@homie/persistence';
 import type { SessionManager } from '@homie/sessions';
 import type { AgentRunner } from './agent-runner';
 import { formatElapsed, formatTokens, timeSince } from './format';
-import type { ProgressHandler, ReplyFn } from '@homie/core';
 
 export interface CommandDeps {
   sessionManager: SessionManager;
@@ -155,7 +155,11 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
       }
       if (lifetime.runs > 0) {
         const lifetimeTokens = lifetime.inputTokens + lifetime.outputTokens;
-        lines.push('', `Lifetime (${lifetime.runs} runs):`, `  Tokens: ${formatTokens(lifetimeTokens)}`);
+        lines.push(
+          '',
+          `Lifetime (${lifetime.runs} runs):`,
+          `  Tokens: ${formatTokens(lifetimeTokens)}`,
+        );
       }
     }
 
@@ -179,7 +183,7 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
       }
     },
 
-    async handlePostSession(sessionId, channel, chatId, command, args, userId, reply, progress) {
+    async handlePostSession(sessionId, channel, chatId, command, _args, _userId, reply, _progress) {
       switch (command) {
         case 'help':
           return cmdHelp(reply);

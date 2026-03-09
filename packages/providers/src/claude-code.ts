@@ -110,7 +110,11 @@ export function createClaudeCodeProvider(config: ClaudeCodeConfig): ProviderAdap
       );
     }
 
-    return { content: result.content, usage: result.usage, resumed: tryResume ? resumed : undefined };
+    return {
+      content: result.content,
+      usage: result.usage,
+      resumed: tryResume ? resumed : undefined,
+    };
   }
 
   return { generate, generateTitle };

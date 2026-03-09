@@ -45,11 +45,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
     startedAt: deps.startedAt,
   });
 
-  async function interruptIfBusy(
-    sessionId: string,
-    status: string,
-    reply: ReplyFn,
-  ): Promise<void> {
+  async function interruptIfBusy(sessionId: string, status: string, reply: ReplyFn): Promise<void> {
     if (status === 'processing') {
       const interrupted = await runner.interrupt(sessionId);
       if (interrupted) {

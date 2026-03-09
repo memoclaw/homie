@@ -1,2 +1,2 @@
-export { type Gateway, type GatewayDeps, createGateway } from './gateway';
-export type { ReplyFn, ProgressHandler } from '@homie/core';
+export type { ProgressHandler, ReplyFn } from '@homie/core';
+export { createGateway, type Gateway, type GatewayDeps } from './gateway';
