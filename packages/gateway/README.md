@@ -1,6 +1,6 @@
 # @homie/gateway
 
-Routes inbound events to commands or the agent runner. The central dispatch layer between channels and the agent.
+Routes inbound events from any channel to commands or the agent runner. The central dispatch layer between channels and local agent CLIs.
 
 ## Components
 
@@ -13,9 +13,10 @@ Routes inbound events to commands or the agent runner. The central dispatch laye
 ## Flow
 
 ```
-InboundEvent → Gateway
-  ├─ Command? → CommandHandler (pre-session or post-session)
-  └─ Chat?    → interrupt existing run if busy → AgentRunner.start()
+InboundEvent (from any channel)
+  → Gateway
+    ├─ Command? → CommandHandler (pre-session or post-session)
+    └─ Chat?    → interrupt existing run if busy → AgentRunner.start()
 ```
 
 ## Usage

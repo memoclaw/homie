@@ -2,6 +2,8 @@
 
 Shared types, interfaces, and error classes used across all Homie packages.
 
+Defines the contracts between channels, providers, and persistence — any local agent CLI or messaging platform plugs in through these interfaces.
+
 ## Exports
 
 ### Types
@@ -13,8 +15,8 @@ Shared types, interfaces, and error classes used across all Homie packages.
 
 ### Interfaces
 
-- `ChannelAdapter` — start/stop/sendMessage for a messaging platform
-- `ProviderAdapter` — generate responses from an AI provider
+- `ChannelAdapter` — start/stop/sendMessage for a messaging platform (Telegram, more coming)
+- `ProviderAdapter` — generate responses from a local agent CLI (Claude Code, Codex, Gemini CLI)
 - `SessionStore` — persistence interface for sessions and messages
 - `EventHandler`, `ReplyFn`, `ProgressHandler`, `ProgressCallback` — callback types
 - `ProviderRequest`, `ProviderResponse` — provider I/O

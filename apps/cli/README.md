@@ -1,6 +1,6 @@
 # @homie/cli
 
-Admin CLI for inspecting Homie state. Not a chat interface — use Telegram for that.
+Admin CLI for inspecting Homie state locally. Not a chat interface — use Telegram for that.
 
 ## Commands
 
