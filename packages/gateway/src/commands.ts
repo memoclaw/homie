@@ -1,6 +1,6 @@
 import type { ProgressHandler, ReplyFn } from '@homie/core';
 import { getErrorMessage } from '@homie/core';
-import type { MemoryStore, UsageStore } from '@homie/persistence';
+import type { UsageStore } from '@homie/persistence';
 import type { SessionManager } from '@homie/sessions';
 import type { AgentRunner } from './agent-runner';
 import { formatElapsed, formatTokens, timeSince } from './format';
@@ -8,7 +8,6 @@ import { formatElapsed, formatTokens, timeSince } from './format';
 export interface CommandDeps {
   sessionManager: SessionManager;
   agentRunner: AgentRunner;
-  memoryStore?: MemoryStore;
   usageStore?: UsageStore;
   startedAt?: Date;
 }
@@ -39,7 +38,7 @@ function sessionLabel(s: { name: string | null; id: string }): string {
 }
 
 export function createCommandHandler(deps: CommandDeps): CommandHandler {
-  const { sessionManager, memoryStore, usageStore } = deps;
+  const { sessionManager, usageStore } = deps;
 
   async function cmdNew(
     channel: string,
@@ -133,10 +132,9 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
     chatId: string,
     reply: ReplyFn,
   ): Promise<true> {
-    const memoryCount = memoryStore?.count() ?? 0;
     const active = await sessionManager.getActiveSession(channel, chatId);
     const label = active ? sessionLabel(active) : 'none';
-    const lines = [`Session: ${label}`, `Memories: ${memoryCount}`];
+    const lines = [`Session: ${label}`];
 
     if (usageStore) {
       const sessionSummary = usageStore.getSessionSummary(sessionId);

@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import type { Message } from '@homie/core';
-import type { MemoryEntry } from '@homie/persistence';
 import { buildMessages } from './context-builder';
 
 function makeMessage(direction: 'in' | 'out', text: string): Message {
@@ -67,29 +66,5 @@ describe('buildMessages', () => {
 
     // system + 2 (in+out, skip internal) + 1 current
     expect(messages.length).toBe(4);
-  });
-
-  test('includes memories in system prompt', () => {
-    const memories: MemoryEntry[] = [
-      {
-        id: '1',
-        scope: 'global',
-        content: 'User prefers TypeScript',
-        tags: '',
-        createdAt: '2024-01-01T00:00:00Z',
-        updatedAt: '2024-01-01T00:00:00Z',
-        sourceSessionId: null,
-      },
-    ];
-
-    const messages = buildMessages({
-      sessionId: 'test',
-      text: 'hi',
-      history: [],
-      memories,
-    });
-
-    expect(messages[0]?.content).toContain('User prefers TypeScript');
-    expect(messages[0]?.content).toContain('Memories:');
   });
 });

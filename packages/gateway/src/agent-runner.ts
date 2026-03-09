@@ -3,7 +3,7 @@ import type { Agent } from '@homie/agent';
 import type { Attachment, ProgressCallback, ProgressHandler, ReplyFn } from '@homie/core';
 import { AbortError, getErrorMessage } from '@homie/core';
 import { createLogger } from '@homie/observability';
-import type { MemoryEntry, MemoryStore, UsageStore } from '@homie/persistence';
+import type { UsageStore } from '@homie/persistence';
 import type { SessionManager } from '@homie/sessions';
 import { formatElapsed, toolHint } from './format';
 
@@ -14,12 +14,11 @@ interface RunHandle {
   done: Promise<void>;
 }
 
+const MAX_HISTORY_MESSAGES = 50;
+
 export interface AgentRunnerDeps {
   sessionManager: SessionManager;
   agent: Agent;
-  maxHistoryMessages: number;
-  memoryStore?: MemoryStore;
-  maxContextMemories?: number;
   usageStore?: UsageStore;
   model?: string;
 }
@@ -80,17 +79,7 @@ export function createAgentRunner(deps: AgentRunnerDeps): AgentRunner {
 
           await sessionManager.setProcessing(sessionId);
 
-          const historyPromise = sessionManager.getHistory(sessionId, deps.maxHistoryMessages);
-
-          let memoriesPromise: Promise<MemoryEntry[] | undefined> = Promise.resolve(undefined);
-          if (deps.memoryStore) {
-            const scopes = ['global'];
-            if (userId) scopes.push(`user:${userId}`);
-            const store = deps.memoryStore;
-            memoriesPromise = Promise.resolve(store.list(scopes, deps.maxContextMemories ?? 50));
-          }
-
-          const [history, memories] = await Promise.all([historyPromise, memoriesPromise]);
+          const history = await sessionManager.getHistory(sessionId, MAX_HISTORY_MESSAGES);
 
           // Prepend attachment file paths so Claude Code can read them
           let promptText = text;
@@ -117,7 +106,6 @@ export function createAgentRunner(deps: AgentRunnerDeps): AgentRunner {
             sessionId,
             text: promptText,
             history,
-            memories,
             userId: userId ?? undefined,
             onProgress,
             signal: controller.signal,
@@ -137,23 +125,6 @@ export function createAgentRunner(deps: AgentRunnerDeps): AgentRunner {
 
           if (result.usage && deps.usageStore) {
             deps.usageStore.record(sessionId, result.usage, deps.model);
-          }
-
-          // Save extracted memories
-          if (result.memories && deps.memoryStore) {
-            for (const m of result.memories) {
-              const now = new Date().toISOString();
-              deps.memoryStore.save({
-                id: crypto.randomUUID(),
-                scope: 'global',
-                content: m.content,
-                tags: '',
-                createdAt: now,
-                updatedAt: now,
-                sourceSessionId: sessionId,
-              });
-              log.info('Memory saved', { sessionId, content: m.content.slice(0, 100) });
-            }
           }
 
           // Generate title for untitled sessions (fire-and-forget)

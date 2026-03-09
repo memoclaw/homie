@@ -39,7 +39,6 @@ describe('CommandHandler', () => {
     const runner = createAgentRunner({
       sessionManager,
       agent,
-      maxHistoryMessages: 20,
       usageStore,
     });
 
@@ -168,7 +167,6 @@ describe('CommandHandler', () => {
       );
       expect(handled).toBe(true);
       expect(replies[0]).toContain('Session:');
-      expect(replies[0]).toContain('Memories:');
     });
 
     test('unknown command returns false', async () => {

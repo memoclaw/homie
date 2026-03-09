@@ -13,13 +13,6 @@ export const AppConfigSchema = z.object({
     model: z.string().default(''),
     extraArgs: z.array(z.string()).default([]),
   }),
-  agent: z.object({
-    maxHistoryMessages: z.number().default(20),
-  }),
-  memory: z.object({
-    enabled: z.boolean().default(true),
-    maxContextMemories: z.number().default(50),
-  }),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;

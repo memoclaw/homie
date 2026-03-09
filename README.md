@@ -46,7 +46,7 @@ Busy? Just send another message — homie interrupts the current task and picks 
 
 ```
 You (Telegram)
-  └── Homie (routing, sessions, memory, persistence)
+  └── Homie (routing, sessions, persistence)
         └── Local agent CLI (Claude Code, Codex, Gemini CLI, ...)
               └── Your codebase
 ```
@@ -55,7 +55,6 @@ Homie spawns your local agent as a subprocess, streams its progress, and deliver
 
 - **Sessions** — SQLite-backed, multi-session per chat, named and switchable
 - **Usage** — token counts tracked per session and lifetime
-- **Memory** — persistent context learned across conversations
 - **Interrupts** — new messages kill the running agent and start fresh
 - **Resilience** — session resume with full history fallback, crash retry with backoff
 
@@ -67,8 +66,6 @@ All settings in `config/system.yaml`:
 |---------|---------|-------------|
 | `telegram.botToken` | — | Set via `TELEGRAM_BOT_TOKEN` env var (required) |
 | `provider.model` | `""` | Override the agent's default model |
-| `memory.enabled` | `true` | Persistent context across sessions |
-| `agent.maxHistoryMessages` | `20` | How much conversation to keep in context |
 
 ## Project structure
 
@@ -80,7 +77,7 @@ packages/
   core/           Types, interfaces, events, errors
   config/         YAML + env var loader (zod)
   observability/  Structured JSON logger
-  persistence/    SQLite stores (sessions, messages, usage, kv, memory)
+  persistence/    SQLite stores (sessions, messages, usage, kv)
   sessions/       Session lifecycle
   providers/      Agent CLI adapters (Claude Code, more coming)
   agent/          Context builder + provider orchestration

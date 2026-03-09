@@ -7,7 +7,7 @@ Routes inbound events from any channel to commands or the agent runner. The cent
 | Factory              | Purpose                                          |
 | -------------------- | ------------------------------------------------ |
 | `createGateway`      | Main event router — resolves sessions, dispatches commands or agent runs |
-| `createAgentRunner`  | Manages background agent runs with interruption, progress heartbeats, memory saving |
+| `createAgentRunner`  | Manages background agent runs with interruption and progress heartbeats |
 | `createCommandHandler` | Handles `/new`, `/use`, `/sessions`, `/ping`, `/status`, `/help` |
 
 ## Flow
@@ -24,6 +24,6 @@ InboundEvent (from any channel)
 ```ts
 import { createGateway } from '@homie/gateway';
 
-const gateway = createGateway({ sessionManager, agent, maxHistoryMessages: 20 });
+const gateway = createGateway({ sessionManager, agent });
 await gateway.handleEvent(event, reply, progress);
 ```

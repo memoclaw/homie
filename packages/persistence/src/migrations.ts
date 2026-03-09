@@ -38,22 +38,6 @@ export const schema = `
   CREATE INDEX IF NOT EXISTS idx_messages_session_time
     ON messages(session_id, created_at);
 
-  CREATE TABLE IF NOT EXISTS memories (
-    id TEXT PRIMARY KEY,
-    scope TEXT NOT NULL DEFAULT 'global',
-    content TEXT NOT NULL,
-    tags TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    source_session_id TEXT
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_memories_scope
-    ON memories(scope);
-
-  CREATE INDEX IF NOT EXISTS idx_memories_updated
-    ON memories(updated_at DESC);
-
   CREATE TABLE IF NOT EXISTS kv (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,

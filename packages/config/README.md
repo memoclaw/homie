@@ -16,8 +16,6 @@ YAML configuration loader with environment variable interpolation and zod valida
 | `app`      | `logLevel`, `dataDir`                   |
 | `telegram` | `botToken`, `allowedChatIds`            |
 | `provider` | `model`, `extraArgs`                    |
-| `agent`    | `maxHistoryMessages`                    |
-| `memory`   | `enabled`, `maxContextMemories`         |
 
 ## Usage
 

@@ -47,7 +47,6 @@ describe('Gateway', () => {
     gateway = createGateway({
       sessionManager,
       agent,
-      maxHistoryMessages: 20,
       usageStore,
     });
 
@@ -156,7 +155,6 @@ describe('Gateway', () => {
     const errorGateway = createGateway({
       sessionManager,
       agent,
-      maxHistoryMessages: 20,
     });
 
     const errorReplies: string[] = [];

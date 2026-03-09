@@ -6,7 +6,6 @@ import { createGateway } from '@homie/gateway';
 import { createLogger, setLogLevel } from '@homie/observability';
 import {
   createKvStore,
-  createMemoryStore,
   createSessionStore,
   createUsageStore,
   openDatabase,
@@ -96,7 +95,6 @@ async function main() {
   // Stores
   const sessionStore = createSessionStore(db);
   const kvStore = createKvStore(db);
-  const memoryStore = config.memory.enabled ? createMemoryStore(db) : undefined;
   const usageStore = createUsageStore(db);
 
   // Session manager
@@ -114,15 +112,11 @@ async function main() {
   // Agent + Gateway
   const agent = createAgent(provider, {
     model: config.provider.model,
-    memoryStore,
   });
 
   const gateway = createGateway({
     sessionManager,
     agent,
-    maxHistoryMessages: config.agent.maxHistoryMessages,
-    memoryStore,
-    maxContextMemories: config.memory.maxContextMemories,
     usageStore,
     model: config.provider.model,
     startedAt,

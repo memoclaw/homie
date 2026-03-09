@@ -2,7 +2,7 @@ import type { Agent } from '@homie/agent';
 import type { InboundEvent, ProgressHandler, ReplyFn } from '@homie/core';
 import { getErrorMessage } from '@homie/core';
 import { createLogger } from '@homie/observability';
-import type { MemoryStore, UsageStore } from '@homie/persistence';
+import type { UsageStore } from '@homie/persistence';
 import type { SessionManager } from '@homie/sessions';
 import { createAgentRunner } from './agent-runner';
 import { createCommandHandler } from './commands';
@@ -12,9 +12,6 @@ const log = createLogger('gateway');
 export interface GatewayDeps {
   sessionManager: SessionManager;
   agent: Agent;
-  maxHistoryMessages: number;
-  memoryStore?: MemoryStore;
-  maxContextMemories?: number;
   usageStore?: UsageStore;
   model?: string;
   startedAt?: Date;
@@ -30,9 +27,6 @@ export function createGateway(deps: GatewayDeps): Gateway {
   const runner = createAgentRunner({
     sessionManager: deps.sessionManager,
     agent: deps.agent,
-    maxHistoryMessages: deps.maxHistoryMessages,
-    memoryStore: deps.memoryStore,
-    maxContextMemories: deps.maxContextMemories,
     usageStore: deps.usageStore,
     model: deps.model,
   });
@@ -40,7 +34,6 @@ export function createGateway(deps: GatewayDeps): Gateway {
   const commands = createCommandHandler({
     sessionManager: deps.sessionManager,
     agentRunner: runner,
-    memoryStore: deps.memoryStore,
     usageStore: deps.usageStore,
     startedAt: deps.startedAt,
   });

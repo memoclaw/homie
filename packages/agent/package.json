@@ -5,7 +5,6 @@
   "types": "src/index.ts",
   "dependencies": {
     "@homie/core": "workspace:*",
-    "@homie/persistence": "workspace:*",
     "@homie/observability": "workspace:*"
   }
 }

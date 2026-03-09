@@ -25,10 +25,10 @@ Homie is an async Telegram agent that wraps the local `claude` CLI. Users send m
 Telegram message → TelegramAdapter → Gateway.handleEvent()
   ├─ Command (/new, /use, etc.) → CommandHandler → reply
   └─ Chat message → AgentRunner.start() (background, interruptible)
-       → SessionManager (history) + MemoryStore (context)
+       → SessionManager (history)
        → Agent.run() → buildMessages() → ClaudeCodeProvider.generate()
        → spawns `claude` CLI with stream-json output
-       → parse response, extract <memory> tags, save usage
+       → parse response, save usage
        → reply to user
 ```
 

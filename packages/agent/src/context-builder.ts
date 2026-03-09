@@ -1,12 +1,10 @@
 import type { Message, ProgressCallback, ProviderMessage } from '@homie/core';
-import type { MemoryEntry } from '@homie/persistence';
 import { buildSystemPrompt } from './prompts';
 
 export interface AgentInput {
   sessionId: string;
   text: string;
   history: Message[];
-  memories?: MemoryEntry[];
   userId?: string;
   onProgress?: ProgressCallback;
   /** Signal to abort the in-flight agent run */
@@ -14,9 +12,7 @@ export interface AgentInput {
 }
 
 export function buildMessages(input: AgentInput): ProviderMessage[] {
-  const systemPrompt = buildSystemPrompt({
-    memories: input.memories,
-  });
+  const systemPrompt = buildSystemPrompt();
 
   const messages: ProviderMessage[] = [{ role: 'system', content: systemPrompt }];
 

@@ -11,10 +11,3 @@ telegram:
 provider:
   model: ""
   extraArgs: []
-
-agent:
-  maxHistoryMessages: 20
-
-memory:
-  enabled: true
-  maxContextMemories: 50
