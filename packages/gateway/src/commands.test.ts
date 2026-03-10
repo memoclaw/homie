@@ -1,12 +1,11 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createAgent } from '@homie/agent';
-import { AbortError, type Message, type ProviderAdapter } from '@homie/core';
+import { AbortError, type ProviderAdapter } from '@homie/core';
 import { schema } from '@homie/persistence/src/migrations';
 import { createSessionStore } from '@homie/persistence/src/session-store';
 import { createTaskStore } from '@homie/persistence/src/task-store';
 import { createUsageStore } from '@homie/persistence/src/usage-store';
-import { createSessionManager } from '@homie/sessions';
 import { type CommandContext, createCommandHandler } from './commands';
 import { createTaskRunner } from './task-runner';
 
@@ -43,26 +42,17 @@ describe('CommandHandler', () => {
 
   /** Helper: create a message and return its ID */
   async function addMessage(text: string): Promise<string> {
-    const msg: Message = {
-      id: crypto.randomUUID(),
-      sessionId,
-      direction: 'in',
-      text,
-      createdAt: new Date().toISOString(),
-      rawSourceId: null,
-    };
-    await sessionStore.appendMessage(msg);
+    const msg = await sessionStore.addMessage(sessionId, 'in', text);
     return msg.id;
   }
 
   beforeEach(async () => {
     db = createTestDb();
     sessionStore = createSessionStore(db);
-    const sessionManager = createSessionManager(sessionStore);
     const usageStore = createUsageStore(db);
     taskStore = createTaskStore(db);
 
-    const session = await sessionManager.resolveSession('telegram', 'chat1', 'user1');
+    const session = await sessionStore.getOrCreateByChat('telegram', 'chat1', 'user1');
     sessionId = session.id;
 
     const provider: ProviderAdapter = {
@@ -70,7 +60,7 @@ describe('CommandHandler', () => {
     };
     const agent = createAgent(provider, { model: 'test' });
     const runner = createTaskRunner({
-      sessionManager,
+      sessionStore,
       agent,
       taskStore,
       usageStore,
@@ -209,10 +199,9 @@ describe('CommandHandler', () => {
     };
     const agent = createAgent(blockingProvider, { model: 'test' });
     const abortSessionStore = createSessionStore(db);
-    const sessionManager = createSessionManager(abortSessionStore);
     const usageStore = createUsageStore(db);
     const blockingRunner = createTaskRunner({
-      sessionManager,
+      sessionStore: abortSessionStore,
       agent,
       taskStore,
       usageStore,
@@ -224,7 +213,7 @@ describe('CommandHandler', () => {
       usageStore,
     });
 
-    const session = await sessionManager.resolveSession('telegram', 'chat-abort', 'user1');
+    const session = await abortSessionStore.getOrCreateByChat('telegram', 'chat-abort', 'user1');
     await blockingRunner.submit({
       channel: 'telegram',
       chatId: 'chat-abort',

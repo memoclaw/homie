@@ -5,13 +5,13 @@ import type {
   ProgressCallback,
   ProgressHandler,
   ReplyFn,
+  SessionStore,
   Task,
   TaskStore,
 } from '@homie/core';
 import { AbortError, getErrorMessage } from '@homie/core';
 import { createLogger } from '@homie/observability';
 import type { UsageStore } from '@homie/persistence';
-import type { SessionManager } from '@homie/sessions';
 import { formatElapsed, toolHint } from './format';
 
 const log = createLogger('task-runner');
@@ -34,7 +34,7 @@ interface QueueEntry {
 }
 
 export interface TaskRunnerDeps {
-  sessionManager: SessionManager;
+  sessionStore: SessionStore;
   agent: Agent;
   taskStore: TaskStore;
   usageStore?: UsageStore;
@@ -57,7 +57,7 @@ export interface TaskRunner {
 }
 
 export function createTaskRunner(deps: TaskRunnerDeps): TaskRunner {
-  const { sessionManager, agent, taskStore } = deps;
+  const { sessionStore, agent, taskStore } = deps;
   const activeRuns = new Map<string, RunHandle>();
   const queues = new Map<string, QueueEntry[]>();
   /** Sessions whose last run was interrupted — next run must replay full history */
@@ -93,9 +93,9 @@ export function createTaskRunner(deps: TaskRunnerDeps): TaskRunner {
         }
 
         const [history] = await Promise.all([
-          sessionManager.getHistory(sessionId, MAX_HISTORY_MESSAGES),
+          sessionStore.listRecentMessages(sessionId, MAX_HISTORY_MESSAGES),
           taskStore.updateTaskStatus(task.id, 'running'),
-          sessionManager.setProcessing(sessionId),
+          sessionStore.setSessionStatus(sessionId, 'processing'),
         ]);
         const forceFullHistory = staleResume.delete(chatKey(task.channel, task.chatId));
 
@@ -137,7 +137,7 @@ export function createTaskRunner(deps: TaskRunnerDeps): TaskRunner {
           await reply('(Session context was refreshed)');
         }
 
-        await sessionManager.addMessage(sessionId, 'out', result.text);
+        await sessionStore.addMessage(sessionId, 'out', result.text);
         await reply(result.text);
         await taskStore.updateTaskStatus(task.id, 'done');
 
@@ -163,7 +163,7 @@ export function createTaskRunner(deps: TaskRunnerDeps): TaskRunner {
         if (typingInterval) clearInterval(typingInterval);
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         activeRuns.delete(chatKey(task.channel, task.chatId));
-        await sessionManager.setIdle(sessionId);
+        await sessionStore.setSessionStatus(sessionId, 'idle');
 
         // Clean up temp attachment files
         if (attachments) {
@@ -214,7 +214,7 @@ export function createTaskRunner(deps: TaskRunnerDeps): TaskRunner {
       const key = chatKey(channel, chatId);
 
       // Store the inbound message first — this is the source of truth
-      const message = await sessionManager.addMessage(sessionId, 'in', text, rawSourceId);
+      const message = await sessionStore.addMessage(sessionId, 'in', text, rawSourceId);
 
       const task = await taskStore.createTask({
         channel,

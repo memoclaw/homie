@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
   elapsedSince,
-  formatCost,
   formatElapsed,
   formatTokens,
   shortId,
@@ -48,22 +47,6 @@ describe('timeSince', () => {
   test('days ago', () => {
     const iso = new Date(Date.now() - 2 * 86400_000).toISOString();
     expect(timeSince(iso)).toBe('2d');
-  });
-});
-
-describe('formatCost', () => {
-  test('zero', () => {
-    expect(formatCost(0)).toBe('$0.00');
-  });
-
-  test('small amounts use 4 decimals', () => {
-    expect(formatCost(0.0042)).toBe('$0.0042');
-    expect(formatCost(0.001)).toBe('$0.0010');
-  });
-
-  test('larger amounts use 2 decimals', () => {
-    expect(formatCost(0.12)).toBe('$0.12');
-    expect(formatCost(1.5)).toBe('$1.50');
   });
 });
 

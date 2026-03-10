@@ -48,18 +48,18 @@ function toMarkdownV2(text: string): string {
       // `inline code`
       const inner = match[2].slice(1, -1);
       tokens.push({ raw: `\`${escapeV2Pre(inner)}\`` });
-    } else if (match[3]) {
+    } else if (match[3] && match[4]) {
       // **bold** → *bold*
-      tokens.push({ raw: `*${escapeV2(match[4]!)}*` });
-    } else if (match[5]) {
+      tokens.push({ raw: `*${escapeV2(match[4])}*` });
+    } else if (match[5] && match[6]) {
       // __italic__ → _italic_
-      tokens.push({ raw: `_${escapeV2(match[6]!)}_` });
-    } else if (match[7]) {
+      tokens.push({ raw: `_${escapeV2(match[6])}_` });
+    } else if (match[7] && match[8]) {
       // *italic* (single) — in standard markdown this is italic
-      tokens.push({ raw: `_${escapeV2(match[8]!)}_` });
-    } else if (match[9]) {
+      tokens.push({ raw: `_${escapeV2(match[8])}_` });
+    } else if (match[9] && match[10]) {
       // _italic_
-      tokens.push({ raw: `_${escapeV2(match[10]!)}_` });
+      tokens.push({ raw: `_${escapeV2(match[10])}_` });
     }
 
     cursor = match.index + match[0].length;
@@ -210,11 +210,16 @@ export function createTelegramAdapter(opts: {
     return allowedChatIds.size === 0 || allowedChatIds.has(chatId);
   }
 
-  async function dispatch(event: ChatMessageEvent, chatId: string): Promise<void> {
+  function buildReplyAndProgress(chatId: string) {
     const reply = async (replyText: string) => {
       await sendMessage({ chatId }, { text: replyText });
     };
     const progress = buildProgress(chatId);
+    return { reply, progress };
+  }
+
+  async function dispatch(event: ChatMessageEvent, chatId: string): Promise<void> {
+    const { reply, progress } = buildReplyAndProgress(chatId);
     await handler(event, reply, progress);
   }
 
@@ -234,17 +239,14 @@ export function createTelegramAdapter(opts: {
     const cmdMatch = text.match(/^\/(\w+)(?:\s+(.*))?$/s);
 
     if (cmdMatch) {
-      const reply = async (replyText: string) => {
-        await sendMessage({ chatId }, { text: replyText });
-      };
-      const progress = buildProgress(chatId);
+      const { reply, progress } = buildReplyAndProgress(chatId);
       await handler(
         {
           type: 'command',
           channel: 'telegram',
           chatId,
           userId,
-          command: cmdMatch[1]!,
+          command: cmdMatch[1] ?? '',
           args: (cmdMatch[2] ?? '').trim(),
           rawSourceId: messageId,
         },

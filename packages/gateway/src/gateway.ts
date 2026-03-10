@@ -1,16 +1,15 @@
 import type { Agent } from '@homie/agent';
-import type { InboundEvent, ProgressHandler, ReplyFn, TaskStore } from '@homie/core';
+import type { InboundEvent, ProgressHandler, ReplyFn, SessionStore, TaskStore } from '@homie/core';
 import { getErrorMessage } from '@homie/core';
 import { createLogger } from '@homie/observability';
 import type { UsageStore } from '@homie/persistence';
-import type { SessionManager } from '@homie/sessions';
 import { createCommandHandler } from './commands';
 import { createTaskRunner } from './task-runner';
 
 const log = createLogger('gateway');
 
 export interface GatewayDeps {
-  sessionManager: SessionManager;
+  sessionStore: SessionStore;
   agent: Agent;
   taskStore: TaskStore;
   usageStore?: UsageStore;
@@ -23,10 +22,10 @@ export interface Gateway {
 }
 
 export function createGateway(deps: GatewayDeps): Gateway {
-  const { sessionManager } = deps;
+  const { sessionStore } = deps;
 
   const runner = createTaskRunner({
-    sessionManager: deps.sessionManager,
+    sessionStore,
     agent: deps.agent,
     taskStore: deps.taskStore,
     usageStore: deps.usageStore,
@@ -44,7 +43,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
     async handleEvent(event, reply, progress) {
       try {
         // Resolve the hidden internal session
-        const session = await sessionManager.resolveSession(
+        const session = await sessionStore.getOrCreateByChat(
           event.channel,
           event.chatId,
           event.userId,

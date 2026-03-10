@@ -6,7 +6,6 @@ import { schema } from '@homie/persistence/src/migrations';
 import { createSessionStore } from '@homie/persistence/src/session-store';
 import { createTaskStore } from '@homie/persistence/src/task-store';
 import { createUsageStore } from '@homie/persistence/src/usage-store';
-import { createSessionManager } from '@homie/sessions';
 import { createTaskRunner, type TaskRunner } from './task-runner';
 
 function createTestDb(): Database {
@@ -26,11 +25,10 @@ describe('TaskRunner', () => {
   beforeEach(async () => {
     db = createTestDb();
     const sessionStore = createSessionStore(db);
-    const sessionManager = createSessionManager(sessionStore);
     const usageStore = createUsageStore(db);
     taskStore = createTaskStore(db);
 
-    const session = await sessionManager.resolveSession('telegram', 'chat1', 'user1');
+    const session = await sessionStore.getOrCreateByChat('telegram', 'chat1', 'user1');
     sessionId = session.id;
 
     provider = {
@@ -48,7 +46,7 @@ describe('TaskRunner', () => {
     const agent = createAgent(provider, { model: 'test' });
 
     runner = createTaskRunner({
-      sessionManager,
+      sessionStore,
       agent,
       taskStore,
       usageStore,

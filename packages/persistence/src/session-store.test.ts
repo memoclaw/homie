@@ -1,6 +1,5 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { Message } from '@homie/core';
 import { schema } from './migrations';
 import { createSessionStore } from './session-store';
 
@@ -47,21 +46,16 @@ describe('SessionStore', () => {
   });
 
   describe('messages', () => {
-    test('append and list messages', async () => {
+    test('addMessage creates and returns message', async () => {
       const session = await store.getOrCreateByChat('telegram', 'chat1');
 
-      const msg: Message = {
-        id: crypto.randomUUID(),
-        sessionId: session.id,
-        direction: 'in',
-        text: 'hello',
-        createdAt: new Date().toISOString(),
-        rawSourceId: null,
-      };
+      const msg = await store.addMessage(session.id, 'in', 'hello');
+      expect(msg.id).toBeTruthy();
+      expect(msg.sessionId).toBe(session.id);
+      expect(msg.direction).toBe('in');
+      expect(msg.text).toBe('hello');
 
-      await store.appendMessage(msg);
       const messages = await store.listRecentMessages(session.id, 10);
-
       expect(messages.length).toBe(1);
       expect(messages[0]?.text).toBe('hello');
       expect(messages[0]?.direction).toBe('in');
@@ -71,14 +65,7 @@ describe('SessionStore', () => {
       const session = await store.getOrCreateByChat('telegram', 'chat1');
 
       for (let i = 0; i < 5; i++) {
-        await store.appendMessage({
-          id: crypto.randomUUID(),
-          sessionId: session.id,
-          direction: 'in',
-          text: `msg-${i}`,
-          createdAt: new Date(Date.now() + i * 1000).toISOString(),
-          rawSourceId: null,
-        });
+        await store.addMessage(session.id, 'in', `msg-${i}`);
       }
 
       const messages = await store.listRecentMessages(session.id, 3);

@@ -59,23 +59,36 @@ export function createSessionStore(db: Database): SessionStore {
       return result.changes;
     },
 
-    async appendMessage(message) {
-      db.prepare(
-        `INSERT INTO messages (id, session_id, direction, text, created_at, raw_source_id)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(
-        message.id,
-        message.sessionId,
-        message.direction,
-        message.text,
-        message.createdAt,
-        message.rawSourceId,
-      );
+    async addMessage(sessionId, direction, text, rawSourceId) {
+      const message: Message = {
+        id: crypto.randomUUID(),
+        sessionId,
+        direction,
+        text,
+        createdAt: new Date().toISOString(),
+        rawSourceId: rawSourceId ?? null,
+      };
 
-      db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run(
-        new Date().toISOString(),
-        message.sessionId,
-      );
+      db.transaction(() => {
+        db.prepare(
+          `INSERT INTO messages (id, session_id, direction, text, created_at, raw_source_id)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        ).run(
+          message.id,
+          message.sessionId,
+          message.direction,
+          message.text,
+          message.createdAt,
+          message.rawSourceId,
+        );
+
+        db.prepare('UPDATE sessions SET updated_at = ? WHERE id = ?').run(
+          message.createdAt,
+          message.sessionId,
+        );
+      })();
+
+      return message;
     },
 
     async listRecentMessages(sessionId, limit) {

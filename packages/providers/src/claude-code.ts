@@ -176,6 +176,15 @@ async function spawnStreaming(
     let usage: UsageStats | undefined;
     const toolsSeen = new Set<string>();
 
+    function handleResultEvent(event: Record<string, unknown>): void {
+      if (event.type === 'result') {
+        if (typeof event.result === 'string') {
+          finalResult = event.result;
+        }
+        usage = parseResultUsage(event);
+      }
+    }
+
     const stderrPromise = new Response(proc.stderr).text();
 
     const reader = proc.stdout.getReader();
@@ -190,7 +199,7 @@ async function spawnStreaming(
       buffer += decoder.decode(value, { stream: true });
 
       const lines = buffer.split('\n');
-      buffer = lines.pop()!;
+      buffer = lines.pop() ?? '';
 
       for (const line of lines) {
         if (!line.trim()) continue;
@@ -199,12 +208,7 @@ async function spawnStreaming(
           processStreamEvent(event, onProgress, toolsSeen, (t) => {
             accumulatedText += t;
           });
-          if (event.type === 'result') {
-            if (typeof event.result === 'string') {
-              finalResult = event.result;
-            }
-            usage = parseResultUsage(event);
-          }
+          handleResultEvent(event);
         } catch {
           // Not valid JSON — ignore
         }
@@ -219,13 +223,7 @@ async function spawnStreaming(
     // Process remaining buffer
     if (buffer.trim()) {
       try {
-        const event = JSON.parse(buffer);
-        if (event.type === 'result') {
-          if (typeof event.result === 'string') {
-            finalResult = event.result;
-          }
-          usage = parseResultUsage(event);
-        }
+        handleResultEvent(JSON.parse(buffer));
       } catch {
         // ignore
       }
@@ -325,8 +323,8 @@ function extractSystemPrompt(messages: ProviderMessage[]): string | null {
 
 function extractLastUserMessage(messages: ProviderMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i]!;
-    if (msg.role === 'user' && msg.content) return msg.content;
+    const msg = messages[i];
+    if (msg?.role === 'user' && msg.content) return msg.content;
   }
   return '';
 }

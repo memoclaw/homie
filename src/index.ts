@@ -2,17 +2,16 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createAgent } from '@homie/agent';
 import { loadConfig } from '@homie/config';
+import { getErrorMessage } from '@homie/core';
 import { createGateway } from '@homie/gateway';
 import { createLogger, setLogLevel } from '@homie/observability';
 import {
-  createKvStore,
   createSessionStore,
   createTaskStore,
   createUsageStore,
   openDatabase,
 } from '@homie/persistence';
 import { checkClaudeCode, createClaudeCodeProvider } from '@homie/providers';
-import { createSessionManager } from '@homie/sessions';
 import { createTelegramAdapter } from '@homie/telegram';
 
 const log = createLogger('server');
@@ -32,7 +31,7 @@ async function verifyTelegramToken(
     }
     return { ok: false, error: data.description ?? 'Invalid bot token' };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, error: getErrorMessage(err) };
   }
 }
 
@@ -95,14 +94,12 @@ async function main() {
 
   // Stores
   const sessionStore = createSessionStore(db);
-  const kvStore = createKvStore(db);
   const usageStore = createUsageStore(db);
   const taskStore = createTaskStore(db);
 
-  // Session manager
-  const sessionManager = createSessionManager(sessionStore);
+  // Reset stuck state from previous run
   const [stuck, stuckTasks] = await Promise.all([
-    sessionManager.resetStuckSessions(),
+    sessionStore.resetStuckSessions(),
     taskStore.resetStuckTasks(),
   ]);
   if (stuck > 0) {
@@ -123,7 +120,7 @@ async function main() {
   });
 
   const gateway = createGateway({
-    sessionManager,
+    sessionStore,
     agent,
     taskStore,
     usageStore,
@@ -140,7 +137,6 @@ async function main() {
   });
   await telegram.start();
 
-  kvStore.set('lastStartup', new Date().toISOString());
   log.info('Homie is running');
 
   // Graceful shutdown

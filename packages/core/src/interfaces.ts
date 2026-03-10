@@ -74,7 +74,12 @@ export interface ProviderAdapter {
 export interface SessionStore {
   getOrCreateByChat(channel: string, chatId: string, userId?: string | null): Promise<Session>;
   getById(sessionId: string): Promise<Session | null>;
-  appendMessage(message: Message): Promise<void>;
+  addMessage(
+    sessionId: string,
+    direction: Message['direction'],
+    text: string,
+    rawSourceId?: string | null,
+  ): Promise<Message>;
   listRecentMessages(sessionId: string, limit: number): Promise<Message[]>;
   setSessionStatus(sessionId: string, status: import('./types').SessionStatus): Promise<void>;
   resetStuckSessions(): Promise<number>;

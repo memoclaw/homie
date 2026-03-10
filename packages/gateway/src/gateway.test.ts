@@ -6,7 +6,6 @@ import { schema } from '@homie/persistence/src/migrations';
 import { createSessionStore } from '@homie/persistence/src/session-store';
 import { createTaskStore } from '@homie/persistence/src/task-store';
 import { createUsageStore } from '@homie/persistence/src/usage-store';
-import { createSessionManager } from '@homie/sessions';
 import { createGateway } from './gateway';
 
 function createTestDb(): Database {
@@ -40,14 +39,13 @@ describe('Gateway', () => {
   beforeEach(() => {
     db = createTestDb();
     const sessionStore = createSessionStore(db);
-    const sessionManager = createSessionManager(sessionStore);
     const usageStore = createUsageStore(db);
     const taskStore = createTaskStore(db);
     provider = createMockProvider();
     const agent = createAgent(provider, { model: 'test' });
 
     gateway = createGateway({
-      sessionManager,
+      sessionStore,
       agent,
       taskStore,
       usageStore,
@@ -216,10 +214,9 @@ describe('Gateway', () => {
 
     const agent = createAgent(badProvider, { model: 'test' });
     const sessionStore = createSessionStore(db);
-    const sessionManager = createSessionManager(sessionStore);
     const taskStore = createTaskStore(db);
     const errorGateway = createGateway({
-      sessionManager,
+      sessionStore,
       agent,
       taskStore,
     });

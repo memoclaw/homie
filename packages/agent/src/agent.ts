@@ -1,8 +1,27 @@
-import type { ProviderAdapter, UsageStats } from '@homie/core';
+import type {
+  Message,
+  ProgressCallback,
+  ProviderAdapter,
+  ProviderMessage,
+  UsageStats,
+} from '@homie/core';
 import { createLogger } from '@homie/observability';
-import { type AgentInput, buildMessages } from './context-builder';
 
 const log = createLogger('agent');
+
+const SYSTEM_PROMPT = 'You are Homie. Keep responses concise (Telegram chat).';
+
+export interface AgentInput {
+  sessionId: string;
+  text: string;
+  history: Message[];
+  /** When true, skip resume and send full history (e.g. after an interrupted run) */
+  forceFullHistory?: boolean;
+  userId?: string;
+  onProgress?: ProgressCallback;
+  /** Signal to abort the in-flight agent run */
+  signal?: AbortSignal;
+}
 
 export interface AgentOutput {
   text: string;
@@ -49,4 +68,20 @@ export function createAgent(provider: ProviderAdapter, config: AgentConfig): Age
       };
     },
   };
+}
+
+function buildMessages(input: AgentInput): ProviderMessage[] {
+  const messages: ProviderMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }];
+
+  for (const msg of input.history) {
+    if (msg.direction === 'in') {
+      messages.push({ role: 'user', content: msg.text });
+    } else if (msg.direction === 'out') {
+      messages.push({ role: 'assistant', content: msg.text });
+    }
+  }
+
+  messages.push({ role: 'user', content: input.text });
+
+  return messages;
 }

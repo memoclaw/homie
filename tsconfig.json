@@ -17,7 +17,6 @@
       "@homie/config": ["./packages/config/src"],
       "@homie/observability": ["./packages/observability/src"],
       "@homie/persistence": ["./packages/persistence/src"],
-      "@homie/sessions": ["./packages/sessions/src"],
       "@homie/gateway": ["./packages/gateway/src"],
       "@homie/telegram": ["./packages/channels/telegram/src"],
       "@homie/providers": ["./packages/providers/src"],

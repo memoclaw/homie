@@ -1,23 +1,5 @@
 export { type ClaudeCodeConfig, createClaudeCodeProvider } from './claude-code';
 
-/**
- * Check if the `claude` CLI is available on the system.
- * Returns the path if found, null otherwise.
- */
-export async function detectClaudeCli(): Promise<string | null> {
-  try {
-    const proc = Bun.spawn(['which', 'claude'], {
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const out = await new Response(proc.stdout).text();
-    const code = await proc.exited;
-    return code === 0 && out.trim() ? out.trim() : null;
-  } catch {
-    return null;
-  }
-}
-
 export interface ClaudeCodeStatus {
   available: boolean;
   authed: boolean;

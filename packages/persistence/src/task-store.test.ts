@@ -1,6 +1,5 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { Message } from '@homie/core';
 import { schema } from './migrations';
 import { createSessionStore } from './session-store';
 import { createTaskStore } from './task-store';
@@ -32,15 +31,7 @@ describe('TaskStore', () => {
 
   /** Helper: create a message and return its ID */
   async function addMessage(text: string): Promise<string> {
-    const msg: Message = {
-      id: crypto.randomUUID(),
-      sessionId,
-      direction: 'in',
-      text,
-      createdAt: new Date().toISOString(),
-      rawSourceId: null,
-    };
-    await sessionStore.appendMessage(msg);
+    const msg = await sessionStore.addMessage(sessionId, 'in', text);
     return msg.id;
   }
 
