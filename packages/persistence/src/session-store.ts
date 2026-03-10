@@ -154,6 +154,12 @@ export function createSessionStore(db: Database): SessionStore {
       return rows.reverse().map(rowToMessage);
     },
 
+    async deleteSession(sessionId) {
+      db.prepare('DELETE FROM active_sessions WHERE session_id = ?').run(sessionId);
+      db.prepare('DELETE FROM messages WHERE session_id = ?').run(sessionId);
+      db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
+    },
+
     async resetSession(channel, chatId) {
       const active = await getActiveSession(channel, chatId);
       if (!active) return null;

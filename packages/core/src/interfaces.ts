@@ -94,5 +94,6 @@ export interface SessionStore {
   getActiveSession(channel: string, chatId: string): Promise<Session | null>;
   setSessionStatus(sessionId: string, status: import('./types').SessionStatus): Promise<void>;
   setTitle(sessionId: string, title: string): Promise<void>;
+  deleteSession(sessionId: string): Promise<void>;
   resetStuckSessions(): Promise<number>;
 }

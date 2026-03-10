@@ -24,6 +24,11 @@ export interface SessionManager {
   getHistory(sessionId: string, limit: number): Promise<Message[]>;
   getSession(sessionId: string): Promise<Session | null>;
   resetSession(channel: string, chatId: string): Promise<string | null>;
+  deleteSession(
+    channel: string,
+    chatId: string,
+    nameOrId: string,
+  ): Promise<{ deletedId: string; wasActive: boolean }>;
   setProcessing(sessionId: string): Promise<void>;
   setIdle(sessionId: string): Promise<void>;
   setTitle(sessionId: string, title: string): Promise<void>;
@@ -101,6 +106,31 @@ export function createSessionManager(store: SessionStore): SessionManager {
 
     async getSession(sessionId) {
       return store.getById(sessionId);
+    },
+
+    async deleteSession(channel, chatId, nameOrId) {
+      let session = await store.getSessionByName(channel, chatId, nameOrId);
+      if (!session) {
+        const all = await store.listSessionsByChat(channel, chatId);
+        session = all.find((s) => s.id.startsWith(nameOrId)) ?? null;
+      }
+      if (!session) throw new Error(`No session "${nameOrId}" found`);
+
+      const active = await store.getActiveSession(channel, chatId);
+      const wasActive = active?.id === session.id;
+
+      await store.deleteSession(session.id);
+
+      if (wasActive) {
+        // Switch to the most recent remaining session
+        const remaining = await store.listSessionsByChat(channel, chatId);
+        if (remaining.length > 0) {
+          await store.setActiveSession(channel, chatId, remaining[0]!.id);
+        }
+      }
+
+      log.info('Session deleted', { sessionId: session.id, name: session.name, chatId });
+      return { deletedId: session.id, wasActive };
     },
 
     async resetSession(channel, chatId) {

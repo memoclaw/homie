@@ -109,6 +109,49 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
     return true;
   }
 
+  async function cmdKill(
+    channel: string,
+    chatId: string,
+    args: string,
+    reply: ReplyFn,
+  ): Promise<true> {
+    const nameOrId = args.trim();
+    if (!nameOrId) {
+      await reply('Usage: /kill <session-name>');
+      return true;
+    }
+
+    try {
+      // Resolve the session first to get its ID for interruption
+      const sessions = await sessionManager.listSessions(channel, chatId);
+      const target =
+        sessions.find((s) => s.name === nameOrId) ??
+        sessions.find((s) => s.id.startsWith(nameOrId));
+
+      if (target) {
+        await deps.agentRunner.interrupt(target.id);
+      }
+
+      const { deletedId, wasActive } = await sessionManager.deleteSession(
+        channel,
+        chatId,
+        nameOrId,
+      );
+
+      let msg = `Killed session \`${nameOrId}\` (${deletedId.slice(0, 8)})`;
+      if (wasActive) {
+        const active = await sessionManager.getActiveSession(channel, chatId);
+        msg += active
+          ? `\nSwitched to \`${sessionLabel(active)}\``
+          : '\nNo sessions left — send a message to start one.';
+      }
+      await reply(msg);
+    } catch (err) {
+      await reply(getErrorMessage(err));
+    }
+    return true;
+  }
+
   async function cmdHelp(reply: ReplyFn): Promise<true> {
     const help = [
       'Available commands:',
@@ -116,6 +159,7 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
       '/new [name] — Start a new session',
       '/use <name> — Switch to a session',
       '/sessions — List all sessions',
+      '/kill <name> — Delete a session and its history',
       '/ping — Check if Homie is alive',
       '/status — Show system status',
       '/help — Show this help',
@@ -174,6 +218,8 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
           return cmdUse(channel, chatId, args, reply);
         case 'sessions':
           return cmdSessions(channel, chatId, reply);
+        case 'kill':
+          return cmdKill(channel, chatId, args, reply);
         case 'ping':
           return cmdPing(reply);
         default:
