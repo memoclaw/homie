@@ -1,17 +1,18 @@
 import type { Agent } from '@homie/agent';
-import type { InboundEvent, ProgressHandler, ReplyFn } from '@homie/core';
+import type { InboundEvent, ProgressHandler, ReplyFn, TaskStore } from '@homie/core';
 import { getErrorMessage } from '@homie/core';
 import { createLogger } from '@homie/observability';
 import type { UsageStore } from '@homie/persistence';
 import type { SessionManager } from '@homie/sessions';
-import { createAgentRunner } from './agent-runner';
 import { createCommandHandler } from './commands';
+import { createTaskRunner } from './task-runner';
 
 const log = createLogger('gateway');
 
 export interface GatewayDeps {
   sessionManager: SessionManager;
   agent: Agent;
+  taskStore: TaskStore;
   usageStore?: UsageStore;
   model?: string;
   startedAt?: Date;
@@ -24,84 +25,60 @@ export interface Gateway {
 export function createGateway(deps: GatewayDeps): Gateway {
   const { sessionManager } = deps;
 
-  const runner = createAgentRunner({
+  const runner = createTaskRunner({
     sessionManager: deps.sessionManager,
     agent: deps.agent,
+    taskStore: deps.taskStore,
     usageStore: deps.usageStore,
     model: deps.model,
   });
 
   const commands = createCommandHandler({
-    sessionManager: deps.sessionManager,
-    agentRunner: runner,
+    taskStore: deps.taskStore,
+    taskRunner: runner,
     usageStore: deps.usageStore,
     startedAt: deps.startedAt,
   });
 
-  async function interruptIfBusy(sessionId: string, status: string, reply: ReplyFn): Promise<void> {
-    if (status === 'processing') {
-      const interrupted = await runner.interrupt(sessionId);
-      if (interrupted) {
-        await reply('Interrupted. Processing your new message...');
-      }
-    }
-  }
-
   return {
     async handleEvent(event, reply, progress) {
       try {
-        if (event.type === 'command') {
-          const handled = await commands.handlePreSession(
-            event.channel,
-            event.chatId,
-            event.userId,
-            event.command,
-            event.args,
-            reply,
-          );
-          if (handled) return;
-        }
-
+        // Resolve the hidden internal session
         const session = await sessionManager.resolveSession(
           event.channel,
           event.chatId,
           event.userId,
         );
 
+        // Try handling as a command first
         if (event.type === 'command') {
-          const handled = await commands.handlePostSession(
-            session.id,
-            event.channel,
-            event.chatId,
-            event.command,
-            event.args,
-            event.userId,
+          const handled = await commands.handle({
+            channel: event.channel,
+            chatId: event.chatId,
+            userId: event.userId,
+            sessionId: session.id,
+            command: event.command,
+            args: event.args,
             reply,
-            progress,
-          );
+          });
           if (handled) return;
-
-          await interruptIfBusy(session.id, session.status, reply);
-          runner.start(
-            session.id,
-            `/${event.command} ${event.args}`.trim(),
-            null,
-            event.userId,
-            reply,
-            progress,
-          );
-        } else {
-          await interruptIfBusy(session.id, session.status, reply);
-          runner.start(
-            session.id,
-            event.text,
-            event.rawSourceId,
-            event.userId,
-            reply,
-            progress,
-            event.attachments,
-          );
         }
+
+        // Submit as a task (chat messages + unrecognized commands)
+        const text =
+          event.type === 'command' ? `/${event.command} ${event.args}`.trim() : event.text;
+
+        await runner.submit({
+          channel: event.channel,
+          chatId: event.chatId,
+          userId: event.userId,
+          sessionId: session.id,
+          text,
+          rawSourceId: event.rawSourceId,
+          reply,
+          progress,
+          attachments: event.type === 'chat' ? event.attachments : undefined,
+        });
       } catch (err) {
         const message = getErrorMessage(err);
         log.error('Error handling event', { error: message });

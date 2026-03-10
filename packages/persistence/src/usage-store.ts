@@ -23,7 +23,7 @@ export interface UsageSummary {
 }
 
 export interface UsageStore {
-  record(sessionId: string, usage: UsageStats, model?: string): void;
+  record(sessionId: string, usage: UsageStats, model?: string, taskId?: string): void;
   getSessionSummary(sessionId: string): UsageSummary;
   getLifetimeSummary(): UsageSummary;
 }
@@ -48,14 +48,15 @@ const EMPTY_SUMMARY: UsageSummary = {
 
 export function createUsageStore(db: Database): UsageStore {
   return {
-    record(sessionId, usage, model) {
+    record(sessionId, usage, model, taskId) {
       db.prepare(
         `INSERT INTO usage_log
-           (id, session_id, input_tokens, output_tokens, cache_read_tokens, cache_create_tokens, cost_usd, model, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, session_id, task_id, input_tokens, output_tokens, cache_read_tokens, cache_create_tokens, cost_usd, model, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         crypto.randomUUID(),
         sessionId,
+        taskId ?? null,
         usage.inputTokens,
         usage.outputTokens,
         usage.cacheReadTokens,

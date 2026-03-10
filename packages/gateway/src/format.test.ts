@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { formatCost, formatElapsed, formatTokens, timeSince, toolHint } from './format';
+import {
+  elapsedSince,
+  formatCost,
+  formatElapsed,
+  formatTokens,
+  shortId,
+  timeSince,
+  toolHint,
+  truncate,
+} from './format';
 
 describe('formatElapsed', () => {
   test('seconds only', () => {
@@ -73,6 +82,50 @@ describe('formatTokens', () => {
   test('millions', () => {
     expect(formatTokens(1_000_000)).toBe('1.0M');
     expect(formatTokens(1_200_000)).toBe('1.2M');
+  });
+});
+
+describe('shortId', () => {
+  test('truncates UUID to 8 chars', () => {
+    expect(shortId('a1b2c3d4-e5f6-7890-abcd-ef1234567890')).toBe('a1b2c3d4');
+  });
+
+  test('short string returned as-is', () => {
+    expect(shortId('abc')).toBe('abc');
+  });
+
+  test('empty string', () => {
+    expect(shortId('')).toBe('');
+  });
+});
+
+describe('truncate', () => {
+  test('shorter than maxLen unchanged', () => {
+    expect(truncate('hello', 10)).toBe('hello');
+  });
+
+  test('equal to maxLen unchanged', () => {
+    expect(truncate('hello', 5)).toBe('hello');
+  });
+
+  test('longer than maxLen truncated with ellipsis', () => {
+    expect(truncate('hello world', 8)).toBe('hello...');
+  });
+
+  test('maxLen 4 leaves 1 char + ellipsis', () => {
+    expect(truncate('abcdefg', 4)).toBe('a...');
+  });
+});
+
+describe('elapsedSince', () => {
+  test('recent timestamp', () => {
+    const iso = new Date(Date.now() - 30_000).toISOString();
+    expect(elapsedSince(iso)).toBe('30s');
+  });
+
+  test('minutes ago', () => {
+    const iso = new Date(Date.now() - 150_000).toISOString();
+    expect(elapsedSince(iso)).toBe('2m 30s');
   });
 });
 

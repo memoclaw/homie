@@ -10,7 +10,6 @@ function makeMessage(direction: 'in' | 'out', text: string): Message {
     text,
     createdAt: new Date().toISOString(),
     rawSourceId: null,
-    metadata: {},
   };
 }
 
@@ -49,22 +48,5 @@ describe('buildMessages', () => {
     expect(messages[3]).toEqual({ role: 'user', content: 'second question' });
     expect(messages[4]).toEqual({ role: 'assistant', content: 'second answer' });
     expect(messages[5]).toEqual({ role: 'user', content: 'third question' });
-  });
-
-  test('skips internal messages', () => {
-    const history = [
-      makeMessage('in', 'question'),
-      { ...makeMessage('out', 'internal note'), direction: 'internal' as const },
-      makeMessage('out', 'answer'),
-    ];
-
-    const messages = buildMessages({
-      sessionId: 'test',
-      text: 'next',
-      history,
-    });
-
-    // system + 2 (in+out, skip internal) + 1 current
-    expect(messages.length).toBe(4);
   });
 });

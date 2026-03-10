@@ -1,238 +1,160 @@
-import type { ProgressHandler, ReplyFn } from '@homie/core';
-import { getErrorMessage } from '@homie/core';
+import type { ReplyFn, TaskStatus, TaskStore } from '@homie/core';
 import type { UsageStore } from '@homie/persistence';
-import type { SessionManager } from '@homie/sessions';
-import type { AgentRunner } from './agent-runner';
-import { formatElapsed, formatTokens, timeSince } from './format';
+import { elapsedSince, formatElapsed, formatTokens, shortId, timeSince, truncate } from './format';
+import type { TaskRunner } from './task-runner';
 
 export interface CommandDeps {
-  sessionManager: SessionManager;
-  agentRunner: AgentRunner;
+  taskStore: TaskStore;
+  taskRunner: TaskRunner;
   usageStore?: UsageStore;
   startedAt?: Date;
 }
 
-export interface CommandHandler {
-  handlePreSession(
-    channel: string,
-    chatId: string,
-    userId: string | null,
-    command: string,
-    args: string,
-    reply: ReplyFn,
-  ): Promise<boolean>;
-  handlePostSession(
-    sessionId: string,
-    channel: string,
-    chatId: string,
-    command: string,
-    args: string,
-    userId: string | null,
-    reply: ReplyFn,
-    progress?: ProgressHandler,
-  ): Promise<boolean>;
+export interface CommandContext {
+  channel: string;
+  chatId: string;
+  userId: string | null;
+  sessionId: string;
+  command: string;
+  args: string;
+  reply: ReplyFn;
 }
 
-function sessionLabel(s: { name: string | null; id: string }): string {
-  return s.name ?? s.id.slice(0, 8);
+export interface CommandHandler {
+  handle(ctx: CommandContext): Promise<boolean>;
 }
+
+const STATUS_ICON: Record<TaskStatus, string> = {
+  queued: '⏳',
+  running: '▶️',
+  done: '✅',
+  failed: '❌',
+  aborted: '⛔',
+};
 
 export function createCommandHandler(deps: CommandDeps): CommandHandler {
-  const { sessionManager, usageStore } = deps;
+  const { taskStore, taskRunner, usageStore } = deps;
 
-  async function cmdNew(
-    channel: string,
-    chatId: string,
-    userId: string | null,
-    args: string,
-    reply: ReplyFn,
-  ): Promise<true> {
-    const name = args.trim() || `session-${Date.now().toString(36)}`;
-    try {
-      const session = await sessionManager.createNamedSession(channel, chatId, name, userId);
-      await reply(`New session \`${name}\` created (${session.id.slice(0, 8)})`);
-    } catch (err) {
-      await reply(getErrorMessage(err));
-    }
-    return true;
-  }
+  async function cmdList(ctx: CommandContext): Promise<true> {
+    const tasks = await taskStore.listTasks(ctx.channel, ctx.chatId, 10);
 
-  async function cmdUse(
-    channel: string,
-    chatId: string,
-    args: string,
-    reply: ReplyFn,
-  ): Promise<true> {
-    const nameOrId = args.trim();
-    if (!nameOrId) {
-      await reply('Usage: /use <session-name>');
-      return true;
-    }
-    try {
-      const session = await sessionManager.switchSession(channel, chatId, nameOrId);
-      const statusMark = session.status === 'processing' ? ' (busy)' : '';
-      await reply(`Switched to \`${sessionLabel(session)}\`${statusMark}`);
-    } catch (err) {
-      await reply(getErrorMessage(err));
-    }
-    return true;
-  }
-
-  async function cmdSessions(channel: string, chatId: string, reply: ReplyFn): Promise<true> {
-    const sessions = await sessionManager.listSessions(channel, chatId);
-    const active = await sessionManager.getActiveSession(channel, chatId);
-
-    if (sessions.length === 0) {
-      await reply('No sessions yet. Send a message to start one.');
+    if (tasks.length === 0) {
+      await ctx.reply('No tasks yet. Send a message to start one.');
       return true;
     }
 
-    const lines = sessions.map((s) => {
-      const isActive = s.id === active?.id;
-      const label = sessionLabel(s);
-      const title = s.title ? ` - ${s.title}` : '';
-      const status = s.status === 'processing' ? ' [busy]' : '';
-      const tag = isActive ? ' [active]' : '';
-      const age = timeSince(s.updatedAt);
-      return `\`${label}\`${title}${status}${tag} (${age} ago)`;
+    const lines = tasks.map((t) => {
+      const icon = STATUS_ICON[t.status];
+      const age = timeSince(t.createdAt);
+      return `${icon} \`${shortId(t.id)}\` ${truncate(t.text ?? '(no text)', 60)} (${age} ago)`;
     });
 
-    await reply(`Sessions:\n${lines.join('\n')}`);
+    await ctx.reply(`Recent tasks:\n${lines.join('\n')}`);
     return true;
   }
 
-  async function cmdPing(reply: ReplyFn): Promise<true> {
+  async function cmdStatus(ctx: CommandContext): Promise<true> {
     const uptime = deps.startedAt
       ? formatElapsed(Math.floor((Date.now() - deps.startedAt.getTime()) / 1000))
       : 'unknown';
-    await reply(`Pong! Uptime: ${uptime}`);
+
+    const lines = [`Uptime: ${uptime}`];
+
+    const [running, queued] = await Promise.all([
+      taskStore.getRunningTask(ctx.channel, ctx.chatId),
+      taskStore.getQueuedTasks(ctx.channel, ctx.chatId),
+    ]);
+
+    if (running) {
+      lines.push(
+        '',
+        `Running task: \`${shortId(running.id)}\``,
+        running.text ? `Message: ${truncate(running.text, 80)}` : '',
+        `Elapsed: ${elapsedSince(running.createdAt)}`,
+      );
+    }
+
+    if (queued.length > 0) {
+      lines.push('', `Queued: ${queued.length} task(s)`);
+    }
+
+    if (usageStore) {
+      const lifetime = usageStore.getLifetimeSummary();
+      if (lifetime.runs > 0) {
+        const total = lifetime.inputTokens + lifetime.outputTokens;
+        lines.push('', `Lifetime: ${lifetime.runs} runs, ${formatTokens(total)} tokens`);
+      }
+    }
+
+    await ctx.reply(lines.join('\n'));
     return true;
   }
 
-  async function cmdKill(
-    channel: string,
-    chatId: string,
-    args: string,
-    reply: ReplyFn,
-  ): Promise<true> {
-    const nameOrId = args.trim();
-    if (!nameOrId) {
-      await reply('Usage: /kill <session-name>');
+  async function cmdAbort(ctx: CommandContext): Promise<true> {
+    const aborted = await taskRunner.abort(ctx.channel, ctx.chatId);
+    await ctx.reply(aborted ? 'Task aborted.' : 'No running task to abort.');
+    return true;
+  }
+
+  async function cmdDelete(ctx: CommandContext): Promise<true> {
+    const idPrefix = ctx.args.trim();
+    if (!idPrefix) {
+      await ctx.reply('Usage: /delete <task-id>');
       return true;
     }
 
-    try {
-      // Resolve the session first to get its ID for interruption
-      const sessions = await sessionManager.listSessions(channel, chatId);
-      const target =
-        sessions.find((s) => s.name === nameOrId) ??
-        sessions.find((s) => s.id.startsWith(nameOrId));
+    const tasks = await taskStore.listTasks(ctx.channel, ctx.chatId, 50);
+    const match = tasks.filter((t) => t.id.startsWith(idPrefix));
 
-      if (target) {
-        await deps.agentRunner.interrupt(target.id);
-      }
-
-      const { deletedId, wasActive } = await sessionManager.deleteSession(
-        channel,
-        chatId,
-        nameOrId,
-      );
-
-      let msg = `Killed session \`${nameOrId}\` (${deletedId.slice(0, 8)})`;
-      if (wasActive) {
-        const active = await sessionManager.getActiveSession(channel, chatId);
-        msg += active
-          ? `\nSwitched to \`${sessionLabel(active)}\``
-          : '\nNo sessions left — send a message to start one.';
-      }
-      await reply(msg);
-    } catch (err) {
-      await reply(getErrorMessage(err));
+    if (match.length === 0) {
+      await ctx.reply('No task found with that ID.');
+      return true;
     }
+    if (match.length > 1) {
+      await ctx.reply('Ambiguous ID — provide more characters.');
+      return true;
+    }
+
+    const task = match[0]!;
+    if (task.status === 'running' || task.status === 'queued') {
+      await ctx.reply('Cannot delete a running or queued task. Use /abort first.');
+      return true;
+    }
+
+    await taskStore.deleteTask(task.id);
+    await ctx.reply(`Deleted task \`${shortId(task.id)}\``);
     return true;
   }
 
-  async function cmdHelp(reply: ReplyFn): Promise<true> {
+  async function cmdHelp(ctx: CommandContext): Promise<true> {
     const help = [
-      'Available commands:',
+      'Send any message and Homie will work on it.',
       '',
-      '/new [name] — Start a new session',
-      '/use <name> — Switch to a session',
-      '/sessions — List all sessions',
-      '/kill <name> — Delete a session and its history',
-      '/ping — Check if Homie is alive',
-      '/status — Show system status',
+      'Commands:',
+      '/list — Recent tasks',
+      '/status — System status & running task',
+      '/abort — Cancel running task',
+      '/delete <id> — Delete a task from history',
       '/help — Show this help',
-      '',
-      'Any other message is treated as a chat with the agent.',
     ].join('\n');
-    await reply(help);
-    return true;
-  }
-
-  async function cmdStatus(
-    sessionId: string,
-    channel: string,
-    chatId: string,
-    reply: ReplyFn,
-  ): Promise<true> {
-    const active = await sessionManager.getActiveSession(channel, chatId);
-    const label = active ? sessionLabel(active) : 'none';
-    const lines = [`Session: ${label}`];
-
-    if (usageStore) {
-      const sessionSummary = usageStore.getSessionSummary(sessionId);
-      const lifetime = usageStore.getLifetimeSummary();
-
-      if (sessionSummary.runs > 0) {
-        const sessionTokens = sessionSummary.inputTokens + sessionSummary.outputTokens;
-        lines.push(
-          '',
-          `Session (${sessionSummary.runs} runs):`,
-          `  Input: ${formatTokens(sessionSummary.inputTokens)}`,
-          `  Output: ${formatTokens(sessionSummary.outputTokens)}`,
-          `  Cache: ${formatTokens(sessionSummary.cacheReadTokens)} read, ${formatTokens(sessionSummary.cacheCreateTokens)} created`,
-          `  Total: ${formatTokens(sessionTokens)}`,
-        );
-      }
-      if (lifetime.runs > 0) {
-        const lifetimeTokens = lifetime.inputTokens + lifetime.outputTokens;
-        lines.push(
-          '',
-          `Lifetime (${lifetime.runs} runs):`,
-          `  Tokens: ${formatTokens(lifetimeTokens)}`,
-        );
-      }
-    }
-
-    await reply(lines.join('\n'));
+    await ctx.reply(help);
     return true;
   }
 
   return {
-    async handlePreSession(channel, chatId, userId, command, args, reply) {
-      switch (command) {
-        case 'new':
-          return cmdNew(channel, chatId, userId, args, reply);
-        case 'use':
-          return cmdUse(channel, chatId, args, reply);
-        case 'sessions':
-          return cmdSessions(channel, chatId, reply);
-        case 'kill':
-          return cmdKill(channel, chatId, args, reply);
-        case 'ping':
-          return cmdPing(reply);
-        default:
-          return false;
-      }
-    },
-
-    async handlePostSession(sessionId, channel, chatId, command, _args, _userId, reply, _progress) {
-      switch (command) {
-        case 'help':
-          return cmdHelp(reply);
+    async handle(ctx) {
+      switch (ctx.command) {
+        case 'list':
+          return cmdList(ctx);
         case 'status':
-          return cmdStatus(sessionId, channel, chatId, reply);
+          return cmdStatus(ctx);
+        case 'abort':
+          return cmdAbort(ctx);
+        case 'delete':
+          return cmdDelete(ctx);
+        case 'help':
+        case 'start':
+          return cmdHelp(ctx);
         default:
           return false;
       }

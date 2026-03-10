@@ -16,19 +16,11 @@ export interface AgentConfig {
 }
 
 export interface Agent {
-  generateTitle(userMsg: string, assistantMsg: string): Promise<string | null>;
   run(input: AgentInput): Promise<AgentOutput>;
 }
 
 export function createAgent(provider: ProviderAdapter, config: AgentConfig): Agent {
   return {
-    async generateTitle(userMsg, assistantMsg) {
-      if (provider.generateTitle) {
-        return provider.generateTitle(userMsg, assistantMsg);
-      }
-      return null;
-    },
-
     async run(input) {
       const messages = buildMessages(input);
 

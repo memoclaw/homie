@@ -1,5 +1,4 @@
-export type SessionKind = 'dm' | 'group' | 'system';
-export type MessageDirection = 'in' | 'out' | 'internal';
+export type MessageDirection = 'in' | 'out';
 export type SessionStatus = 'idle' | 'processing';
 
 export interface Session {
@@ -7,9 +6,6 @@ export interface Session {
   channel: string;
   chatId: string;
   userId: string | null;
-  kind: SessionKind;
-  title: string | null;
-  name: string | null;
   status: SessionStatus;
   createdAt: string;
   updatedAt: string;
@@ -22,7 +18,22 @@ export interface Message {
   text: string;
   createdAt: string;
   rawSourceId: string | null;
-  metadata: Record<string, unknown>;
+}
+
+// --- Tasks ---
+
+export type TaskStatus = 'queued' | 'running' | 'done' | 'failed' | 'aborted';
+
+export interface Task {
+  id: string;
+  channel: string;
+  chatId: string;
+  userId: string | null;
+  sessionId: string;
+  messageId: string | null;
+  status: TaskStatus;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** Token usage and cost returned by a provider after a generation. */

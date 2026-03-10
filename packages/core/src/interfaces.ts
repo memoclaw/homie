@@ -1,4 +1,4 @@
-import type { Message, Session, UsageStats } from './types';
+import type { Message, Session, Task, UsageStats } from './types';
 
 // --- Channel ---
 
@@ -67,8 +67,6 @@ export interface ProviderResponse {
 
 export interface ProviderAdapter {
   generate(input: ProviderRequest): Promise<ProviderResponse>;
-  /** Lightweight call to generate a session title from first exchange */
-  generateTitle?(userMsg: string, assistantMsg: string): Promise<string | null>;
 }
 
 // --- Stores ---
@@ -78,22 +76,32 @@ export interface SessionStore {
   getById(sessionId: string): Promise<Session | null>;
   appendMessage(message: Message): Promise<void>;
   listRecentMessages(sessionId: string, limit: number): Promise<Message[]>;
-  resetSession(channel: string, chatId: string): Promise<string | null>;
-  countSessions(): Promise<number>;
-
-  // Multi-session support
-  createSession(
-    channel: string,
-    chatId: string,
-    name: string,
-    userId?: string | null,
-  ): Promise<Session>;
-  listSessionsByChat(channel: string, chatId: string): Promise<Session[]>;
-  getSessionByName(channel: string, chatId: string, name: string): Promise<Session | null>;
-  setActiveSession(channel: string, chatId: string, sessionId: string): Promise<void>;
-  getActiveSession(channel: string, chatId: string): Promise<Session | null>;
   setSessionStatus(sessionId: string, status: import('./types').SessionStatus): Promise<void>;
-  setTitle(sessionId: string, title: string): Promise<void>;
-  deleteSession(sessionId: string): Promise<void>;
   resetStuckSessions(): Promise<number>;
+  countSessions(): Promise<number>;
+}
+
+// --- Task Store ---
+
+export interface CreateTaskParams {
+  channel: string;
+  chatId: string;
+  userId: string | null;
+  sessionId: string;
+  messageId: string | null;
+}
+
+export interface TaskWithText extends Task {
+  text: string | null;
+}
+
+export interface TaskStore {
+  createTask(params: CreateTaskParams): Promise<Task>;
+  getTask(taskId: string): Promise<Task | null>;
+  getRunningTask(channel: string, chatId: string): Promise<TaskWithText | null>;
+  getQueuedTasks(channel: string, chatId: string): Promise<Task[]>;
+  listTasks(channel: string, chatId: string, limit?: number): Promise<TaskWithText[]>;
+  updateTaskStatus(taskId: string, status: Task['status']): Promise<void>;
+  deleteTask(taskId: string): Promise<void>;
+  resetStuckTasks(): Promise<number>;
 }

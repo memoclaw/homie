@@ -31,29 +31,6 @@ export function createClaudeCodeProvider(config: ClaudeCodeConfig): ProviderAdap
   const cmd = 'claude';
   const extraArgs = config.extraArgs ?? [];
 
-  async function generateTitle(userMsg: string, assistantMsg: string): Promise<string | null> {
-    const prompt = [
-      'Generate a short title (3-5 words) for this conversation.',
-      'Reply with ONLY the title, no quotes or punctuation.',
-      '',
-      `User: ${userMsg.slice(0, 300)}`,
-      `Assistant: ${assistantMsg.slice(0, 500)}`,
-    ].join('\n');
-
-    try {
-      const proc = Bun.spawn(
-        [cmd, '-p', prompt, '--output-format', 'text', '--model', 'claude-haiku-4-5-20251001'],
-        { stdout: 'pipe', stderr: 'pipe' },
-      );
-      const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-      if (exitCode !== 0) return null;
-      const title = stdout.trim().replace(/^["']|["']$/g, '');
-      return title || null;
-    } catch {
-      return null;
-    }
-  }
-
   async function generate(input: ProviderRequest): Promise<ProviderResponse> {
     const systemPrompt = input.sessionId ? extractSystemPrompt(input.messages) : null;
     const prompt = input.sessionId
@@ -75,7 +52,10 @@ export function createClaudeCodeProvider(config: ClaudeCodeConfig): ProviderAdap
     // If resume failed, retry with full history as a fresh session
     const tryResume = input.sessionId && input.hasHistory;
     if (result.exitCode !== 0 && tryResume) {
-      log.warn('Resume failed, retrying with full history', { sessionId: input.sessionId });
+      log.info('Resume failed, retrying with full history', {
+        sessionId: input.sessionId,
+        exitCode: result.exitCode,
+      });
       resumed = false;
       const fullPrompt = flattenMessages(input.messages);
       const retryArgs = buildArgs({
@@ -91,9 +71,9 @@ export function createClaudeCodeProvider(config: ClaudeCodeConfig): ProviderAdap
 
     // Retry once on crash (non-resume failures)
     if (result.content === null && !input.signal?.aborted) {
-      log.warn('Claude Code crashed, retrying in 3s', {
+      log.warn('Claude Code failed, retrying in 3s', {
         exitCode: result.exitCode,
-        stderr: result.stderr.slice(0, 200),
+        stderr: result.stderr.slice(0, 500),
       });
       await new Promise((r) => setTimeout(r, 3000));
 
@@ -108,6 +88,10 @@ export function createClaudeCodeProvider(config: ClaudeCodeConfig): ProviderAdap
       if (input.signal?.aborted) {
         throw new AbortError();
       }
+      log.error('Claude Code failed after all retries', {
+        exitCode: result.exitCode,
+        stderr: result.stderr.slice(0, 500),
+      });
       throw new ProviderError(
         `Claude Code exited with code ${result.exitCode}: ${result.stderr.slice(0, 300)}`,
       );
@@ -120,7 +104,7 @@ export function createClaudeCodeProvider(config: ClaudeCodeConfig): ProviderAdap
     };
   }
 
-  return { generate, generateTitle };
+  return { generate };
 }
 
 // --- Arg building ---
@@ -251,7 +235,6 @@ async function spawnStreaming(
     const content = finalResult ?? (accumulatedText.trim() || null);
 
     if (exitCode !== 0 && !content) {
-      log.error('Claude Code failed', { exitCode, stderr: stderr.slice(0, 500) });
       return { exitCode, stderr, content: null };
     }
 

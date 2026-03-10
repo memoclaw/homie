@@ -7,6 +7,7 @@ import { createLogger, setLogLevel } from '@homie/observability';
 import {
   createKvStore,
   createSessionStore,
+  createTaskStore,
   createUsageStore,
   openDatabase,
 } from '@homie/persistence';
@@ -96,12 +97,19 @@ async function main() {
   const sessionStore = createSessionStore(db);
   const kvStore = createKvStore(db);
   const usageStore = createUsageStore(db);
+  const taskStore = createTaskStore(db);
 
   // Session manager
   const sessionManager = createSessionManager(sessionStore);
   const stuck = await sessionManager.resetStuckSessions();
   if (stuck > 0) {
     log.info('Reset stuck sessions from previous run', { count: stuck });
+  }
+
+  // Reset stuck tasks
+  const stuckTasks = await taskStore.resetStuckTasks();
+  if (stuckTasks > 0) {
+    log.info('Reset stuck tasks from previous run', { count: stuckTasks });
   }
 
   const provider = createClaudeCodeProvider({
@@ -117,6 +125,7 @@ async function main() {
   const gateway = createGateway({
     sessionManager,
     agent,
+    taskStore,
     usageStore,
     model: config.provider.model,
     startedAt,

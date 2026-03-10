@@ -32,6 +32,22 @@ export function formatTokens(count: number): string {
   return `${count}`;
 }
 
+/** Truncate a UUID to a short prefix (e.g. "a1b2c3d4") */
+export function shortId(id: string): string {
+  return id.slice(0, 8);
+}
+
+/** Truncate a string with ellipsis if it exceeds maxLen */
+export function truncate(str: string, maxLen: number): string {
+  return str.length > maxLen ? `${str.slice(0, maxLen - 3)}...` : str;
+}
+
+/** Seconds elapsed since an ISO timestamp, formatted human-readable */
+export function elapsedSince(iso: string): string {
+  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  return formatElapsed(seconds);
+}
+
 /** Map a tool name to a human-readable hint */
 const TOOL_HINTS: Record<string, string> = {
   Read: 'Reading files',

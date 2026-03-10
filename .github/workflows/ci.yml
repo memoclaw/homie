@@ -71,6 +71,3 @@ jobs:
 
       - name: Build server
         run: bun build apps/server/src/index.ts --outdir dist/server --target bun
-
-      - name: Build CLI
-        run: bun build apps/cli/src/index.ts --outdir dist/cli --target bun

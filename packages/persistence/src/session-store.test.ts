@@ -30,7 +30,6 @@ describe('SessionStore', () => {
       expect(session.id).toBeDefined();
       expect(session.channel).toBe('telegram');
       expect(session.chatId).toBe('chat1');
-      expect(session.name).toBe('default');
       expect(session.status).toBe('idle');
     });
 
@@ -47,56 +46,6 @@ describe('SessionStore', () => {
     });
   });
 
-  describe('createSession + multi-session', () => {
-    test('creates named session', async () => {
-      const session = await store.createSession('telegram', 'chat1', 'my-project');
-      expect(session.name).toBe('my-project');
-      expect(session.status).toBe('idle');
-    });
-
-    test('listSessionsByChat returns all sessions', async () => {
-      await store.createSession('telegram', 'chat1', 'project-a');
-      await store.createSession('telegram', 'chat1', 'project-b');
-
-      const sessions = await store.listSessionsByChat('telegram', 'chat1');
-      expect(sessions.length).toBe(2);
-    });
-
-    test('getSessionByName finds by name', async () => {
-      await store.createSession('telegram', 'chat1', 'my-project');
-      const found = await store.getSessionByName('telegram', 'chat1', 'my-project');
-      expect(found).not.toBeNull();
-      expect(found?.name).toBe('my-project');
-    });
-
-    test('getSessionByName returns null for unknown', async () => {
-      const found = await store.getSessionByName('telegram', 'chat1', 'nope');
-      expect(found).toBeNull();
-    });
-  });
-
-  describe('active sessions', () => {
-    test('setActiveSession + getActiveSession', async () => {
-      const session = await store.createSession('telegram', 'chat1', 'test');
-      await store.setActiveSession('telegram', 'chat1', session.id);
-
-      const active = await store.getActiveSession('telegram', 'chat1');
-      expect(active).not.toBeNull();
-      expect(active?.id).toBe(session.id);
-    });
-
-    test('switching active session', async () => {
-      const s1 = await store.createSession('telegram', 'chat1', 'first');
-      const s2 = await store.createSession('telegram', 'chat1', 'second');
-
-      await store.setActiveSession('telegram', 'chat1', s1.id);
-      await store.setActiveSession('telegram', 'chat1', s2.id);
-
-      const active = await store.getActiveSession('telegram', 'chat1');
-      expect(active?.id).toBe(s2.id);
-    });
-  });
-
   describe('messages', () => {
     test('append and list messages', async () => {
       const session = await store.getOrCreateByChat('telegram', 'chat1');
@@ -108,7 +57,6 @@ describe('SessionStore', () => {
         text: 'hello',
         createdAt: new Date().toISOString(),
         rawSourceId: null,
-        metadata: { foo: 'bar' },
       };
 
       await store.appendMessage(msg);
@@ -117,7 +65,6 @@ describe('SessionStore', () => {
       expect(messages.length).toBe(1);
       expect(messages[0]?.text).toBe('hello');
       expect(messages[0]?.direction).toBe('in');
-      expect(messages[0]?.metadata).toEqual({ foo: 'bar' });
     });
 
     test('listRecentMessages respects limit and order', async () => {
@@ -131,7 +78,6 @@ describe('SessionStore', () => {
           text: `msg-${i}`,
           createdAt: new Date(Date.now() + i * 1000).toISOString(),
           rawSourceId: null,
-          metadata: {},
         });
       }
 
@@ -169,49 +115,12 @@ describe('SessionStore', () => {
     });
   });
 
-  describe('resetSession', () => {
-    test('deletes session and its messages', async () => {
-      const session = await store.getOrCreateByChat('telegram', 'chat1');
-      await store.appendMessage({
-        id: crypto.randomUUID(),
-        sessionId: session.id,
-        direction: 'in',
-        text: 'test',
-        createdAt: new Date().toISOString(),
-        rawSourceId: null,
-        metadata: {},
-      });
-
-      const oldId = await store.resetSession('telegram', 'chat1');
-      expect(oldId).toBe(session.id);
-
-      const deleted = await store.getById(session.id);
-      expect(deleted).toBeNull();
-    });
-
-    test('returns null if no active session', async () => {
-      const result = await store.resetSession('telegram', 'nonexistent');
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('setTitle', () => {
-    test('updates session title', async () => {
-      const session = await store.getOrCreateByChat('telegram', 'chat1');
-      expect(session.title).toBeNull();
-
-      await store.setTitle(session.id, 'My Chat');
-      const updated = await store.getById(session.id);
-      expect(updated?.title).toBe('My Chat');
-    });
-  });
-
   describe('countSessions', () => {
     test('counts all sessions', async () => {
       expect(await store.countSessions()).toBe(0);
 
-      await store.createSession('telegram', 'chat1', 'a');
-      await store.createSession('telegram', 'chat1', 'b');
+      await store.getOrCreateByChat('telegram', 'chat1');
+      await store.getOrCreateByChat('telegram', 'chat2');
       expect(await store.countSessions()).toBe(2);
     });
   });

@@ -4,6 +4,7 @@ import { createAgent } from '@homie/agent';
 import type { ChatMessageEvent, CommandEvent, ProviderAdapter } from '@homie/core';
 import { schema } from '@homie/persistence/src/migrations';
 import { createSessionStore } from '@homie/persistence/src/session-store';
+import { createTaskStore } from '@homie/persistence/src/task-store';
 import { createUsageStore } from '@homie/persistence/src/usage-store';
 import { createSessionManager } from '@homie/sessions';
 import { createGateway } from './gateway';
@@ -41,12 +42,14 @@ describe('Gateway', () => {
     const sessionStore = createSessionStore(db);
     const sessionManager = createSessionManager(sessionStore);
     const usageStore = createUsageStore(db);
+    const taskStore = createTaskStore(db);
     provider = createMockProvider();
     const agent = createAgent(provider, { model: 'test' });
 
     gateway = createGateway({
       sessionManager,
       agent,
+      taskStore,
       usageStore,
     });
 
@@ -61,7 +64,7 @@ describe('Gateway', () => {
     replies.push(text);
   };
 
-  test('routes chat message to agent', async () => {
+  test('routes chat message to agent via task runner', async () => {
     const event: ChatMessageEvent = {
       type: 'chat',
       channel: 'telegram',
@@ -73,7 +76,7 @@ describe('Gateway', () => {
 
     await gateway.handleEvent(event, replyFn);
 
-    // Agent runs async (fire-and-forget), wait a tick
+    // Task runner executes async, wait a tick
     await new Promise((r) => setTimeout(r, 100));
 
     expect(provider.generate).toHaveBeenCalled();
@@ -93,54 +96,116 @@ describe('Gateway', () => {
 
     await gateway.handleEvent(event, replyFn);
     expect(replies.length).toBe(1);
-    expect(replies[0]).toContain('Available commands');
+    expect(replies[0]).toContain('Commands');
   });
 
-  test('handles /new command', async () => {
+  test('handles /list command', async () => {
     const event: CommandEvent = {
       type: 'command',
       channel: 'telegram',
       chatId: 'chat1',
       userId: 'user1',
-      command: 'new',
-      args: 'my-project',
+      command: 'list',
+      args: '',
       rawSourceId: '1',
     };
 
     await gateway.handleEvent(event, replyFn);
     expect(replies.length).toBe(1);
-    expect(replies[0]).toContain('my-project');
-    expect(replies[0]).toContain('created');
+    expect(replies[0]).toContain('No tasks yet');
   });
 
-  test('handles /sessions command', async () => {
-    // First create a session
-    const chatEvent: ChatMessageEvent = {
+  test('unknown command is treated as a task', async () => {
+    const event: CommandEvent = {
+      type: 'command',
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      command: 'whatever',
+      args: 'do stuff',
+      rawSourceId: '1',
+    };
+
+    await gateway.handleEvent(event, replyFn);
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(provider.generate).toHaveBeenCalled();
+  });
+
+  test('passes attachments through to agent', async () => {
+    const event: ChatMessageEvent = {
       type: 'chat',
       channel: 'telegram',
       chatId: 'chat1',
       userId: 'user1',
-      text: 'hello',
+      text: 'analyze this file',
       rawSourceId: '1',
+      attachments: [{ filePath: '/tmp/test.png', mimeType: 'image/png', fileName: 'test.png' }],
     };
-    await gateway.handleEvent(chatEvent, replyFn);
+
+    await gateway.handleEvent(event, replyFn);
     await new Promise((r) => setTimeout(r, 100));
 
-    replies = [];
+    expect(provider.generate).toHaveBeenCalled();
+    // The generate call should include attachment references in the prompt
+    const call = (provider.generate as ReturnType<typeof mock>).mock.calls[0];
+    const messages = call?.[0]?.messages;
+    const lastMsg = messages?.[messages.length - 1];
+    expect(lastMsg?.content).toContain('test.png');
+  });
 
+  test('routes /status command without calling agent', async () => {
     const event: CommandEvent = {
       type: 'command',
       channel: 'telegram',
       chatId: 'chat1',
       userId: 'user1',
-      command: 'sessions',
+      command: 'status',
       args: '',
-      rawSourceId: '2',
+      rawSourceId: '1',
     };
 
     await gateway.handleEvent(event, replyFn);
     expect(replies.length).toBe(1);
-    expect(replies[0]).toContain('Sessions:');
+    expect(replies[0]).toContain('Uptime');
+    expect(provider.generate).not.toHaveBeenCalled();
+  });
+
+  test('routes /abort command without calling agent', async () => {
+    const event: CommandEvent = {
+      type: 'command',
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      command: 'abort',
+      args: '',
+      rawSourceId: '1',
+    };
+
+    await gateway.handleEvent(event, replyFn);
+    expect(replies.length).toBe(1);
+    expect(replies[0]).toContain('No running task');
+    expect(provider.generate).not.toHaveBeenCalled();
+  });
+
+  test('unknown command text is passed as task text', async () => {
+    const event: CommandEvent = {
+      type: 'command',
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      command: 'whatever',
+      args: 'do stuff',
+      rawSourceId: '1',
+    };
+
+    await gateway.handleEvent(event, replyFn);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const call = (provider.generate as ReturnType<typeof mock>).mock.calls[0];
+    const messages = call?.[0]?.messages;
+    const lastMsg = messages?.[messages.length - 1];
+    expect(lastMsg?.content).toContain('/whatever do stuff');
   });
 
   test('handles errors gracefully', async () => {
@@ -152,9 +217,11 @@ describe('Gateway', () => {
     const agent = createAgent(badProvider, { model: 'test' });
     const sessionStore = createSessionStore(db);
     const sessionManager = createSessionManager(sessionStore);
+    const taskStore = createTaskStore(db);
     const errorGateway = createGateway({
       sessionManager,
       agent,
+      taskStore,
     });
 
     const errorReplies: string[] = [];

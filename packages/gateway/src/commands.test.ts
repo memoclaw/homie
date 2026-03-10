@@ -1,13 +1,14 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createAgent } from '@homie/agent';
-import type { ProviderAdapter } from '@homie/core';
+import { AbortError, type Message, type ProviderAdapter } from '@homie/core';
 import { schema } from '@homie/persistence/src/migrations';
 import { createSessionStore } from '@homie/persistence/src/session-store';
+import { createTaskStore } from '@homie/persistence/src/task-store';
 import { createUsageStore } from '@homie/persistence/src/usage-store';
 import { createSessionManager } from '@homie/sessions';
-import { createAgentRunner } from './agent-runner';
-import { createCommandHandler } from './commands';
+import { type CommandContext, createCommandHandler } from './commands';
+import { createTaskRunner } from './task-runner';
 
 function createTestDb(): Database {
   const db = new Database(':memory:');
@@ -19,32 +20,65 @@ function createTestDb(): Database {
 describe('CommandHandler', () => {
   let db: Database;
   let handler: ReturnType<typeof createCommandHandler>;
-  let sessionManager: ReturnType<typeof createSessionManager>;
   let replies: string[];
+  let taskStore: ReturnType<typeof createTaskStore>;
+  let sessionStore: ReturnType<typeof createSessionStore>;
+  let sessionId: string;
 
   const replyFn = async (text: string) => {
     replies.push(text);
   };
 
-  beforeEach(() => {
+  function ctx(command: string, args = ''): CommandContext {
+    return {
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      sessionId,
+      command,
+      args,
+      reply: replyFn,
+    };
+  }
+
+  /** Helper: create a message and return its ID */
+  async function addMessage(text: string): Promise<string> {
+    const msg: Message = {
+      id: crypto.randomUUID(),
+      sessionId,
+      direction: 'in',
+      text,
+      createdAt: new Date().toISOString(),
+      rawSourceId: null,
+    };
+    await sessionStore.appendMessage(msg);
+    return msg.id;
+  }
+
+  beforeEach(async () => {
     db = createTestDb();
-    const sessionStore = createSessionStore(db);
-    sessionManager = createSessionManager(sessionStore);
+    sessionStore = createSessionStore(db);
+    const sessionManager = createSessionManager(sessionStore);
     const usageStore = createUsageStore(db);
+    taskStore = createTaskStore(db);
+
+    const session = await sessionManager.resolveSession('telegram', 'chat1', 'user1');
+    sessionId = session.id;
 
     const provider: ProviderAdapter = {
       generate: async () => ({ content: 'ok', usage: undefined }),
     };
     const agent = createAgent(provider, { model: 'test' });
-    const runner = createAgentRunner({
+    const runner = createTaskRunner({
       sessionManager,
       agent,
+      taskStore,
       usageStore,
     });
 
     handler = createCommandHandler({
-      sessionManager,
-      agentRunner: runner,
+      taskStore,
+      taskRunner: runner,
       usageStore,
     });
 
@@ -55,132 +89,223 @@ describe('CommandHandler', () => {
     db.close();
   });
 
-  describe('pre-session commands', () => {
-    test('/new creates named session', async () => {
-      const handled = await handler.handlePreSession(
-        'telegram',
-        'chat1',
-        'user1',
-        'new',
-        'my-project',
-        replyFn,
-      );
-      expect(handled).toBe(true);
-      expect(replies[0]).toContain('my-project');
-      expect(replies[0]).toContain('created');
-    });
-
-    test('/new with no name generates one', async () => {
-      const handled = await handler.handlePreSession(
-        'telegram',
-        'chat1',
-        'user1',
-        'new',
-        '',
-        replyFn,
-      );
-      expect(handled).toBe(true);
-      expect(replies[0]).toContain('created');
-    });
-
-    test('/use requires args', async () => {
-      const handled = await handler.handlePreSession(
-        'telegram',
-        'chat1',
-        'user1',
-        'use',
-        '',
-        replyFn,
-      );
-      expect(handled).toBe(true);
-      expect(replies[0]).toContain('Usage');
-    });
-
-    test('/use switches to named session', async () => {
-      await sessionManager.createNamedSession('telegram', 'chat1', 'target');
-      const handled = await handler.handlePreSession(
-        'telegram',
-        'chat1',
-        'user1',
-        'use',
-        'target',
-        replyFn,
-      );
-      expect(handled).toBe(true);
-      expect(replies[0]).toContain('Switched');
-      expect(replies[0]).toContain('target');
-    });
-
-    test('/sessions lists sessions', async () => {
-      await sessionManager.resolveSession('telegram', 'chat1');
-      const handled = await handler.handlePreSession(
-        'telegram',
-        'chat1',
-        'user1',
-        'sessions',
-        '',
-        replyFn,
-      );
-      expect(handled).toBe(true);
-      expect(replies[0]).toContain('Sessions:');
-    });
-
-    test('unknown command returns false', async () => {
-      const handled = await handler.handlePreSession(
-        'telegram',
-        'chat1',
-        'user1',
-        'unknown',
-        '',
-        replyFn,
-      );
-      expect(handled).toBe(false);
-    });
+  test('/help returns help text', async () => {
+    const handled = await handler.handle(ctx('help'));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('Commands');
   });
 
-  describe('post-session commands', () => {
-    test('/help returns help text', async () => {
-      const session = await sessionManager.resolveSession('telegram', 'chat1');
-      const handled = await handler.handlePostSession(
-        session.id,
-        'telegram',
-        'chat1',
-        'help',
-        '',
-        'user1',
-        replyFn,
-      );
-      expect(handled).toBe(true);
-      expect(replies[0]).toContain('Available commands');
+  test('/list with no tasks', async () => {
+    const handled = await handler.handle(ctx('list'));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('No tasks yet');
+  });
+
+  test('/list shows tasks', async () => {
+    const msgId = await addMessage('fix the bug');
+    await taskStore.createTask({
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      sessionId,
+      messageId: msgId,
+    });
+    const handled = await handler.handle(ctx('list'));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('fix the bug');
+  });
+
+  test('/status returns uptime', async () => {
+    const handled = await handler.handle(ctx('status'));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('Uptime');
+  });
+
+  test('/abort with no running task', async () => {
+    const handled = await handler.handle(ctx('abort'));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('No running task');
+  });
+
+  test('/delete requires id', async () => {
+    const handled = await handler.handle(ctx('delete'));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('Usage');
+  });
+
+  test('/delete removes completed task', async () => {
+    const task = await taskStore.createTask({
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      sessionId,
+      messageId: null,
+    });
+    await taskStore.updateTaskStatus(task.id, 'done');
+
+    const handled = await handler.handle(ctx('delete', task.id.slice(0, 8)));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('Deleted');
+  });
+
+  test('/delete rejects running task', async () => {
+    const task = await taskStore.createTask({
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      sessionId,
+      messageId: null,
+    });
+    await taskStore.updateTaskStatus(task.id, 'running');
+
+    const handled = await handler.handle(ctx('delete', task.id.slice(0, 8)));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('Cannot delete');
+  });
+
+  test('/start is aliased to /help', async () => {
+    const handled = await handler.handle(ctx('start'));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('Commands');
+  });
+
+  test('/status shows running task details', async () => {
+    const msgId = await addMessage('deploy feature');
+    const task = await taskStore.createTask({
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      sessionId,
+      messageId: msgId,
+    });
+    await taskStore.updateTaskStatus(task.id, 'running');
+
+    const handled = await handler.handle(ctx('status'));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('Running task');
+    expect(replies[0]).toContain('deploy feature');
+  });
+
+  test('/status shows queued task count', async () => {
+    const t1 = await taskStore.createTask({
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      sessionId,
+      messageId: null,
+    });
+    await taskStore.updateTaskStatus(t1.id, 'running');
+
+    await taskStore.createTask({
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      sessionId,
+      messageId: null,
+    });
+    await taskStore.createTask({
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      sessionId,
+      messageId: null,
     });
 
-    test('/status returns status info', async () => {
-      const session = await sessionManager.resolveSession('telegram', 'chat1');
-      const handled = await handler.handlePostSession(
-        session.id,
-        'telegram',
-        'chat1',
-        'status',
-        '',
-        'user1',
-        replyFn,
-      );
-      expect(handled).toBe(true);
-      expect(replies[0]).toContain('Session:');
+    const handled = await handler.handle(ctx('status'));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('Queued: 2 task(s)');
+  });
+
+  test('/list shows status icons', async () => {
+    const msgId = await addMessage('completed task');
+    const task = await taskStore.createTask({
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      sessionId,
+      messageId: msgId,
+    });
+    await taskStore.updateTaskStatus(task.id, 'done');
+
+    const handled = await handler.handle(ctx('list'));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('✅');
+    expect(replies[0]).toContain('completed task');
+  });
+
+  test('/delete with non-existent ID', async () => {
+    const handled = await handler.handle(ctx('delete', 'zzz'));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('No task found');
+  });
+
+  test('/delete rejects queued task', async () => {
+    const task = await taskStore.createTask({
+      channel: 'telegram',
+      chatId: 'chat1',
+      userId: 'user1',
+      sessionId,
+      messageId: null,
     });
 
-    test('unknown command returns false', async () => {
-      const session = await sessionManager.resolveSession('telegram', 'chat1');
-      const handled = await handler.handlePostSession(
-        session.id,
-        'telegram',
-        'chat1',
-        'nope',
-        '',
-        'user1',
-        replyFn,
-      );
-      expect(handled).toBe(false);
+    const handled = await handler.handle(ctx('delete', task.id.slice(0, 8)));
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('Cannot delete');
+  });
+
+  test('/abort with running task', async () => {
+    const blockingProvider: ProviderAdapter = {
+      generate: async ({ signal }: { signal?: AbortSignal }) => {
+        await new Promise((_resolve, reject) => {
+          if (signal?.aborted) return reject(new AbortError());
+          signal?.addEventListener('abort', () => reject(new AbortError()));
+        });
+        return { content: '', usage: undefined };
+      },
+    };
+    const agent = createAgent(blockingProvider, { model: 'test' });
+    const abortSessionStore = createSessionStore(db);
+    const sessionManager = createSessionManager(abortSessionStore);
+    const usageStore = createUsageStore(db);
+    const blockingRunner = createTaskRunner({
+      sessionManager,
+      agent,
+      taskStore,
+      usageStore,
     });
+
+    const blockingHandler = createCommandHandler({
+      taskStore,
+      taskRunner: blockingRunner,
+      usageStore,
+    });
+
+    const session = await sessionManager.resolveSession('telegram', 'chat-abort', 'user1');
+    await blockingRunner.submit({
+      channel: 'telegram',
+      chatId: 'chat-abort',
+      userId: 'user1',
+      sessionId: session.id,
+      text: 'do something',
+      rawSourceId: null,
+      reply: async () => {},
+    });
+
+    const handled = await blockingHandler.handle({
+      channel: 'telegram',
+      chatId: 'chat-abort',
+      userId: 'user1',
+      sessionId: session.id,
+      command: 'abort',
+      args: '',
+      reply: replyFn,
+    });
+    expect(handled).toBe(true);
+    expect(replies[0]).toContain('Task aborted');
+  });
+
+  test('unknown command returns false', async () => {
+    const handled = await handler.handle(ctx('unknown'));
+    expect(handled).toBe(false);
   });
 });
