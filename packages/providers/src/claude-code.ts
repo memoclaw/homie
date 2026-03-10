@@ -105,6 +105,9 @@ export function createClaudeCodeProvider(config: ClaudeCodeConfig): ProviderAdap
     }
 
     if (result.content === null) {
+      if (input.signal?.aborted) {
+        throw new AbortError();
+      }
       throw new ProviderError(
         `Claude Code exited with code ${result.exitCode}: ${result.stderr.slice(0, 300)}`,
       );

@@ -38,7 +38,7 @@ export function createAgent(provider: ProviderAdapter, config: AgentConfig): Age
         messages,
         model: config.model,
         sessionId: input.sessionId,
-        hasHistory: input.history.length > 0,
+        hasHistory: input.history.length > 0 && !input.forceFullHistory,
         onProgress: input.onProgress,
         signal: input.signal,
       });

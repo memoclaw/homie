@@ -50,7 +50,7 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
     const name = args.trim() || `session-${Date.now().toString(36)}`;
     try {
       const session = await sessionManager.createNamedSession(channel, chatId, name, userId);
-      await reply(`New session "${name}" created (${session.id.slice(0, 8)})`);
+      await reply(`New session \`${name}\` created (${session.id.slice(0, 8)})`);
     } catch (err) {
       await reply(getErrorMessage(err));
     }
@@ -71,7 +71,7 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
     try {
       const session = await sessionManager.switchSession(channel, chatId, nameOrId);
       const statusMark = session.status === 'processing' ? ' (busy)' : '';
-      await reply(`Switched to "${sessionLabel(session)}"${statusMark}`);
+      await reply(`Switched to \`${sessionLabel(session)}\`${statusMark}`);
     } catch (err) {
       await reply(getErrorMessage(err));
     }
@@ -94,7 +94,7 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
       const status = s.status === 'processing' ? ' [busy]' : '';
       const tag = isActive ? ' [active]' : '';
       const age = timeSince(s.updatedAt);
-      return `${label}${title}${status}${tag} (${age} ago)`;
+      return `\`${label}\`${title}${status}${tag} (${age} ago)`;
     });
 
     await reply(`Sessions:\n${lines.join('\n')}`);

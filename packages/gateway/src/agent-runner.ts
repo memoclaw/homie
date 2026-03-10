@@ -38,6 +38,8 @@ export interface AgentRunner {
 
 export function createAgentRunner(deps: AgentRunnerDeps): AgentRunner {
   const activeRuns = new Map<string, RunHandle>();
+  /** Sessions whose last run was interrupted — next run must replay full history */
+  const staleResume = new Set<string>();
   const { sessionManager, agent } = deps;
 
   return {
@@ -48,6 +50,7 @@ export function createAgentRunner(deps: AgentRunnerDeps): AgentRunner {
       log.info('Interrupting session', { sessionId });
       handle.abort.abort();
       await handle.done;
+      staleResume.add(sessionId);
       return true;
     },
 
@@ -80,6 +83,7 @@ export function createAgentRunner(deps: AgentRunnerDeps): AgentRunner {
           await sessionManager.setProcessing(sessionId);
 
           const history = await sessionManager.getHistory(sessionId, MAX_HISTORY_MESSAGES);
+          const forceFullHistory = staleResume.delete(sessionId);
 
           // Prepend attachment file paths so Claude Code can read them
           let promptText = text;
@@ -106,6 +110,7 @@ export function createAgentRunner(deps: AgentRunnerDeps): AgentRunner {
             sessionId,
             text: promptText,
             history,
+            forceFullHistory,
             userId: userId ?? undefined,
             onProgress,
             signal: controller.signal,

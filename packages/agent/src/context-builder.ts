@@ -5,6 +5,8 @@ export interface AgentInput {
   sessionId: string;
   text: string;
   history: Message[];
+  /** When true, skip resume and send full history (e.g. after an interrupted run) */
+  forceFullHistory?: boolean;
   userId?: string;
   onProgress?: ProgressCallback;
   /** Signal to abort the in-flight agent run */
