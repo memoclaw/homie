@@ -228,6 +228,7 @@ async function spawnStreaming(
     }
 
     if (signal?.aborted) {
+      await proc.exited;
       return { exitCode: 1, stderr: 'aborted', content: null };
     }
 
