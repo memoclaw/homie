@@ -16,15 +16,27 @@ No API keys. No cloud billing. Just your existing CLI subscriptions.
 - **Async by design** — fire and forget, check results when you're ready
 - **Self-hosted** — your machine, your data, your agents
 
-## Quick start
+## Install
+
+### From source
 
 ```bash
+git clone https://github.com/memoclaw/homie.git
+cd homie
 bun install
 cp .env.example .env   # add your TELEGRAM_BOT_TOKEN
 bun run dev
 ```
 
-Homie verifies your Telegram token and Claude Code auth on startup before accepting messages.
+### Build and link globally
+
+```bash
+bun run build          # outputs dist/cli.js
+bun link               # makes `homie` available globally
+homie
+```
+
+Requires [Bun](https://bun.sh) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated. Homie verifies your Telegram token and Claude Code auth on startup before accepting messages.
 
 ## Every message is a task
 
@@ -36,7 +48,6 @@ If Homie is already working on something, your message gets queued and runs next
 /list            Recent tasks and their status
 /status          Running task, queue, and uptime
 /abort           Cancel the running task and clear the queue
-/delete <id>     Remove a completed task from history
 /help            Show commands
 ```
 
@@ -74,8 +85,8 @@ Telegram message
 ## Project structure
 
 ```
-apps/
-  server/           Boot, preflight checks, wiring, graceful shutdown
+src/                  Boot, preflight checks, wiring, graceful shutdown
+bin/                  CLI entry point (homie)
 packages/
   core/             Types (Task, Session, Message), interfaces, errors
   config/           YAML loader with ${ENV_VAR} interpolation (zod)

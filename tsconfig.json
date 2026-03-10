@@ -24,5 +24,5 @@
       "@homie/agent": ["./packages/agent/src"]
     }
   },
-  "include": ["packages/*/src/**/*.ts", "packages/channels/*/src/**/*.ts", "apps/*/src/**/*.ts"]
+  "include": ["src/**/*.ts", "packages/*/src/**/*.ts", "packages/channels/*/src/**/*.ts"]
 }

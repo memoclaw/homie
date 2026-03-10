@@ -127,42 +127,6 @@ describe('CommandHandler', () => {
     expect(replies[0]).toContain('No running task');
   });
 
-  test('/delete requires id', async () => {
-    const handled = await handler.handle(ctx('delete'));
-    expect(handled).toBe(true);
-    expect(replies[0]).toContain('Usage');
-  });
-
-  test('/delete removes completed task', async () => {
-    const task = await taskStore.createTask({
-      channel: 'telegram',
-      chatId: 'chat1',
-      userId: 'user1',
-      sessionId,
-      messageId: null,
-    });
-    await taskStore.updateTaskStatus(task.id, 'done');
-
-    const handled = await handler.handle(ctx('delete', task.id.slice(0, 8)));
-    expect(handled).toBe(true);
-    expect(replies[0]).toContain('Deleted');
-  });
-
-  test('/delete rejects running task', async () => {
-    const task = await taskStore.createTask({
-      channel: 'telegram',
-      chatId: 'chat1',
-      userId: 'user1',
-      sessionId,
-      messageId: null,
-    });
-    await taskStore.updateTaskStatus(task.id, 'running');
-
-    const handled = await handler.handle(ctx('delete', task.id.slice(0, 8)));
-    expect(handled).toBe(true);
-    expect(replies[0]).toContain('Cannot delete');
-  });
-
   test('/start is aliased to /help', async () => {
     const handled = await handler.handle(ctx('start'));
     expect(handled).toBe(true);
@@ -231,26 +195,6 @@ describe('CommandHandler', () => {
     expect(handled).toBe(true);
     expect(replies[0]).toContain('✅');
     expect(replies[0]).toContain('completed task');
-  });
-
-  test('/delete with non-existent ID', async () => {
-    const handled = await handler.handle(ctx('delete', 'zzz'));
-    expect(handled).toBe(true);
-    expect(replies[0]).toContain('No task found');
-  });
-
-  test('/delete rejects queued task', async () => {
-    const task = await taskStore.createTask({
-      channel: 'telegram',
-      chatId: 'chat1',
-      userId: 'user1',
-      sessionId,
-      messageId: null,
-    });
-
-    const handled = await handler.handle(ctx('delete', task.id.slice(0, 8)));
-    expect(handled).toBe(true);
-    expect(replies[0]).toContain('Cannot delete');
   });
 
   test('/abort with running task', async () => {

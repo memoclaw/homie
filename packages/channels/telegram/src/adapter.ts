@@ -334,11 +334,9 @@ export function createTelegramAdapter(opts: {
 
       try {
         await bot.api.setMyCommands([
-          { command: 'new', description: 'Start a new session' },
-          { command: 'use', description: 'Switch to a session' },
-          { command: 'sessions', description: 'List all sessions' },
-          { command: 'ping', description: 'Check if Homie is alive' },
-          { command: 'status', description: 'Show system status' },
+          { command: 'list', description: 'Recent tasks' },
+          { command: 'status', description: 'System status & running task' },
+          { command: 'abort', description: 'Cancel running task' },
           { command: 'help', description: 'Show help' },
         ]);
       } catch (err) {

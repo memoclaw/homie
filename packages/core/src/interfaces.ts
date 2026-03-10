@@ -102,6 +102,5 @@ export interface TaskStore {
   getQueuedTasks(channel: string, chatId: string): Promise<Task[]>;
   listTasks(channel: string, chatId: string, limit?: number): Promise<TaskWithText[]>;
   updateTaskStatus(taskId: string, status: Task['status']): Promise<void>;
-  deleteTask(taskId: string): Promise<void>;
   resetStuckTasks(): Promise<number>;
 }

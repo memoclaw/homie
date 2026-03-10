@@ -33,6 +33,6 @@
     }
   },
   "files": {
-    "includes": ["packages/*/src/**/*.ts", "packages/channels/*/src/**/*.ts", "apps/*/src/**/*.ts"]
+    "includes": ["src/**/*.ts", "packages/*/src/**/*.ts", "packages/channels/*/src/**/*.ts"]
   }
 }

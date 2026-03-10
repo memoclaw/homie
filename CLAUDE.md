@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-bun run dev              # Start server (apps/server)
+bun run dev              # Start server
 bun test                 # Run all tests (bun test runner)
 bun test packages/gateway/src/commands.test.ts  # Run a single test file
 bun tsc --noEmit         # Type check
@@ -35,14 +35,14 @@ Telegram message → TelegramAdapter → Gateway.handleEvent()
 
 ```
 core (types, interfaces, errors) ← everything depends on this
-config (YAML loader) ← server
+config (YAML loader) ← src/
 observability (logger) ← most packages
-persistence (SQLite stores) ← sessions, gateway, server
-sessions (session manager) ← gateway, server
-providers (claude CLI wrapper) ← agent, server
-agent (context + provider orchestration) ← gateway, server
-gateway (routing, commands, task-runner) ← server, telegram
-channels/telegram (grammy adapter) ← server
+persistence (SQLite stores) ← sessions, gateway, src/
+sessions (session manager) ← gateway, src/
+providers (claude CLI wrapper) ← agent, src/
+agent (context + provider orchestration) ← gateway, src/
+gateway (routing, commands, task-runner) ← src/, telegram
+channels/telegram (grammy adapter) ← src/
 ```
 
 ### Key patterns

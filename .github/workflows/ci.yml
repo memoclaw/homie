@@ -69,5 +69,5 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: Build server
-        run: bun build apps/server/src/index.ts --outdir dist/server --target bun
+      - name: Build
+        run: bun run build

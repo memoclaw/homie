@@ -101,13 +101,13 @@ async function main() {
 
   // Session manager
   const sessionManager = createSessionManager(sessionStore);
-  const stuck = await sessionManager.resetStuckSessions();
+  const [stuck, stuckTasks] = await Promise.all([
+    sessionManager.resetStuckSessions(),
+    taskStore.resetStuckTasks(),
+  ]);
   if (stuck > 0) {
     log.info('Reset stuck sessions from previous run', { count: stuck });
   }
-
-  // Reset stuck tasks
-  const stuckTasks = await taskStore.resetStuckTasks();
   if (stuckTasks > 0) {
     log.info('Reset stuck tasks from previous run', { count: stuckTasks });
   }

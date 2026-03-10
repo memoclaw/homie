@@ -96,36 +96,6 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
     return true;
   }
 
-  async function cmdDelete(ctx: CommandContext): Promise<true> {
-    const idPrefix = ctx.args.trim();
-    if (!idPrefix) {
-      await ctx.reply('Usage: /delete <task-id>');
-      return true;
-    }
-
-    const tasks = await taskStore.listTasks(ctx.channel, ctx.chatId, 50);
-    const match = tasks.filter((t) => t.id.startsWith(idPrefix));
-
-    if (match.length === 0) {
-      await ctx.reply('No task found with that ID.');
-      return true;
-    }
-    if (match.length > 1) {
-      await ctx.reply('Ambiguous ID — provide more characters.');
-      return true;
-    }
-
-    const task = match[0]!;
-    if (task.status === 'running' || task.status === 'queued') {
-      await ctx.reply('Cannot delete a running or queued task. Use /abort first.');
-      return true;
-    }
-
-    await taskStore.deleteTask(task.id);
-    await ctx.reply(`Deleted task \`${shortId(task.id)}\``);
-    return true;
-  }
-
   async function cmdHelp(ctx: CommandContext): Promise<true> {
     const help = [
       'Send any message and Homie will work on it.',
@@ -134,7 +104,6 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
       '/list — Recent tasks',
       '/status — System status & running task',
       '/abort — Cancel running task',
-      '/delete <id> — Delete a task from history',
       '/help — Show this help',
     ].join('\n');
     await ctx.reply(help);
@@ -150,8 +119,6 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
           return cmdStatus(ctx);
         case 'abort':
           return cmdAbort(ctx);
-        case 'delete':
-          return cmdDelete(ctx);
         case 'help':
         case 'start':
           return cmdHelp(ctx);

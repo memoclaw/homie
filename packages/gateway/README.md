@@ -8,7 +8,7 @@ Routes inbound events from any channel to commands or the task runner. The centr
 | ---------------------- | ------------------------------------------------------------ |
 | `createGateway`        | Main event router — resolves sessions, dispatches commands or tasks |
 | `createTaskRunner`     | Queues tasks, executes one at a time per chat, with progress heartbeats |
-| `createCommandHandler` | Handles `/list`, `/status`, `/abort`, `/delete`, `/help`     |
+| `createCommandHandler` | Handles `/list`, `/status`, `/abort`, `/help`                |
 
 ## Flow
 

@@ -188,26 +188,6 @@ describe('TaskStore', () => {
     });
   });
 
-  describe('deleteTask', () => {
-    test('removes task', async () => {
-      const task = await store.createTask({ ...params(), sessionId, messageId: null });
-      await store.deleteTask(task.id);
-
-      const found = await store.getTask(task.id);
-      expect(found).toBeNull();
-    });
-
-    test('does not affect other tasks', async () => {
-      const t1 = await store.createTask({ ...params(), sessionId, messageId: null });
-      const t2 = await store.createTask({ ...params(), sessionId, messageId: null });
-      await store.deleteTask(t2.id);
-
-      const remaining = await store.listTasks('telegram', 'chat1');
-      expect(remaining.length).toBe(1);
-      expect(remaining[0]?.id).toBe(t1.id);
-    });
-  });
-
   describe('resetStuckTasks', () => {
     test('sets running tasks to failed', async () => {
       const t1 = await store.createTask({ ...params(), sessionId, messageId: null });

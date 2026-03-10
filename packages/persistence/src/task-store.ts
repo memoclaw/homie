@@ -70,10 +70,6 @@ export function createTaskStore(db: Database): TaskStore {
       );
     },
 
-    async deleteTask(taskId) {
-      db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
-    },
-
     async resetStuckTasks() {
       const result = db
         .prepare(

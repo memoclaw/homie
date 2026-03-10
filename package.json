@@ -1,17 +1,32 @@
 {
   "name": "homie",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Async Telegram agent powered by Claude Code",
+  "bin": {
+    "homie": "./bin/homie.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "config"
+  ],
   "workspaces": [
     "packages/*",
-    "packages/channels/*",
-    "apps/*"
+    "packages/channels/*"
   ],
   "scripts": {
-    "dev": "bun run apps/server/src/index.ts",
+    "dev": "bun run src/index.ts",
+    "prepublishOnly": "bun run build",
+    "build": "bun build src/index.ts --target=bun --outfile=dist/cli.js --external grammy --external yaml --external zod",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "test": "bun test"
+  },
+  "dependencies": {
+    "grammy": "^1.35.0",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
