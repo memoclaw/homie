@@ -10,6 +10,7 @@ export const AppConfigSchema = z.object({
     allowedChatIds: z.array(z.union([z.string(), z.number()])).default([]),
   }),
   provider: z.object({
+    kind: z.enum(['claude-code', 'codex']).default('claude-code'),
     model: z.string().default(''),
     extraArgs: z.array(z.string()).default([]),
   }),

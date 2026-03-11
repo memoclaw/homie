@@ -69,6 +69,18 @@ export interface ProviderAdapter {
   generate(input: ProviderRequest): Promise<ProviderResponse>;
 }
 
+// --- Account Usage ---
+
+export interface AccountUsageWindow {
+  label: string;
+  percentUsed: number;
+  resetsAt: string;
+}
+
+export interface AccountUsageProvider {
+  getAccountUsage(): Promise<AccountUsageWindow[] | null>;
+}
+
 // --- Stores ---
 
 export interface SessionStore {

@@ -1,5 +1,12 @@
 import type { Agent } from '@homie/agent';
-import type { InboundEvent, ProgressHandler, ReplyFn, SessionStore, TaskStore } from '@homie/core';
+import type {
+  AccountUsageProvider,
+  InboundEvent,
+  ProgressHandler,
+  ReplyFn,
+  SessionStore,
+  TaskStore,
+} from '@homie/core';
 import { getErrorMessage } from '@homie/core';
 import { createLogger } from '@homie/observability';
 import type { UsageStore } from '@homie/persistence';
@@ -13,8 +20,8 @@ export interface GatewayDeps {
   agent: Agent;
   taskStore: TaskStore;
   usageStore?: UsageStore;
+  accountUsage?: AccountUsageProvider;
   model?: string;
-  startedAt?: Date;
 }
 
 export interface Gateway {
@@ -36,7 +43,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
     taskStore: deps.taskStore,
     taskRunner: runner,
     usageStore: deps.usageStore,
-    startedAt: deps.startedAt,
+    accountUsage: deps.accountUsage,
   });
 
   return {

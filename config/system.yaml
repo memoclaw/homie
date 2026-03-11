@@ -9,5 +9,6 @@ telegram:
 
 # Claude Code provider
 provider:
-  model: ""
+  kind: codex
+  model: "gpt-5.4"
   extraArgs: []

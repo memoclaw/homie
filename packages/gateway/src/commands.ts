@@ -1,13 +1,19 @@
-import type { ReplyFn, TaskStatus, TaskStore } from '@homie/core';
+import type {
+  AccountUsageProvider,
+  AccountUsageWindow,
+  ReplyFn,
+  TaskStatus,
+  TaskStore,
+} from '@homie/core';
 import type { UsageStore } from '@homie/persistence';
-import { elapsedSince, formatElapsed, formatTokens, shortId, timeSince, truncate } from './format';
+import { formatTokens, shortId, timeSince, truncate } from './format';
 import type { TaskRunner } from './task-runner';
 
 export interface CommandDeps {
   taskStore: TaskStore;
   taskRunner: TaskRunner;
   usageStore?: UsageStore;
-  startedAt?: Date;
+  accountUsage?: AccountUsageProvider;
 }
 
 export interface CommandContext {
@@ -33,7 +39,7 @@ const STATUS_ICON: Record<TaskStatus, string> = {
 };
 
 export function createCommandHandler(deps: CommandDeps): CommandHandler {
-  const { taskStore, taskRunner, usageStore } = deps;
+  const { taskStore, taskRunner, usageStore, accountUsage } = deps;
 
   async function cmdList(ctx: CommandContext): Promise<true> {
     const tasks = await taskStore.listTasks(ctx.channel, ctx.chatId, 10);
@@ -54,39 +60,10 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
   }
 
   async function cmdStatus(ctx: CommandContext): Promise<true> {
-    const uptime = deps.startedAt
-      ? formatElapsed(Math.floor((Date.now() - deps.startedAt.getTime()) / 1000))
-      : 'unknown';
+    const lines = buildLifetimeUsageLines(usageStore);
+    appendAccountUsageLines(lines, await accountUsage?.getAccountUsage());
 
-    const lines = [`Uptime: ${uptime}`];
-
-    const [running, queued] = await Promise.all([
-      taskStore.getRunningTask(ctx.channel, ctx.chatId),
-      taskStore.getQueuedTasks(ctx.channel, ctx.chatId),
-    ]);
-
-    if (running) {
-      lines.push(
-        '',
-        `Running task: \`${shortId(running.id)}\``,
-        running.text ? `Message: ${truncate(running.text, 80)}` : '',
-        `Elapsed: ${elapsedSince(running.createdAt)}`,
-      );
-    }
-
-    if (queued.length > 0) {
-      lines.push('', `Queued: ${queued.length} task(s)`);
-    }
-
-    if (usageStore) {
-      const lifetime = usageStore.getLifetimeSummary();
-      if (lifetime.runs > 0) {
-        const total = lifetime.inputTokens + lifetime.outputTokens;
-        lines.push('', `Lifetime: ${lifetime.runs} runs, ${formatTokens(total)} tokens`);
-      }
-    }
-
-    await ctx.reply(lines.join('\n'));
+    await ctx.reply(lines.length > 0 ? lines.join('\n') : 'No usage data yet.');
     return true;
   }
 
@@ -102,7 +79,7 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
       '',
       'Commands:',
       '/list — Recent tasks',
-      '/status — System status & running task',
+      '/status — Usage & token costs',
       '/abort — Cancel running task',
       '/help — Show this help',
     ].join('\n');
@@ -127,4 +104,68 @@ export function createCommandHandler(deps: CommandDeps): CommandHandler {
       }
     },
   };
+}
+
+// --- Usage formatting ---
+
+function buildLifetimeUsageLines(usageStore: UsageStore | undefined): string[] {
+  if (!usageStore) {
+    return [];
+  }
+
+  const lifetime = usageStore.getLifetimeSummary();
+  if (lifetime.runs === 0) {
+    return [];
+  }
+
+  return [
+    `Token costs: $${lifetime.totalCostUsd.toFixed(2)}`,
+    `${lifetime.runs} runs · ${formatTokens(lifetime.inputTokens + lifetime.outputTokens)} tokens`,
+  ];
+}
+
+function appendAccountUsageLines(
+  lines: string[],
+  windows: AccountUsageWindow[] | null | undefined,
+): void {
+  if (!windows) {
+    return;
+  }
+
+  for (const window of windows) {
+    lines.push('', formatUsageSummary(window));
+  }
+}
+
+const TIME_FMT = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  hour12: true,
+  timeZoneName: 'short',
+});
+
+const DATE_TIME_FMT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  hour12: true,
+  timeZoneName: 'short',
+});
+
+function formatUsageSummary(window: AccountUsageWindow): string {
+  const pct = Math.round(window.percentUsed);
+  const resetStr = formatResetTime(window.resetsAt);
+  return `${window.label} ${pct}% used Resets ${resetStr}`;
+}
+
+function formatResetTime(iso: string): string {
+  if (!iso) return 'unknown';
+  const date = new Date(iso);
+  const now = new Date();
+
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  return sameDay ? TIME_FMT.format(date) : DATE_TIME_FMT.format(date);
 }

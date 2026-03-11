@@ -15,7 +15,7 @@ YAML configuration loader with environment variable interpolation and zod valida
 | ---------- | --------------------------------------- |
 | `app`      | `logLevel`, `dataDir`                   |
 | `telegram` | `botToken`, `allowedChatIds`            |
-| `provider` | `model`, `extraArgs`                    |
+| `provider` | `kind`, `model`, `extraArgs`            |
 
 ## Usage
 
@@ -23,4 +23,34 @@ YAML configuration loader with environment variable interpolation and zod valida
 import { loadConfig } from '@homie/config';
 
 const config = loadConfig(); // reads config/system.yaml
+```
+
+## Provider examples
+
+Claude Code:
+
+```yaml
+provider:
+  kind: claude-code
+  model: opus
+  extraArgs: []
+```
+
+Codex CLI:
+
+```yaml
+provider:
+  kind: codex
+  model: ""
+  extraArgs:
+    - --skip-git-repo-check
+```
+
+Codex CLI with an explicit model pin:
+
+```yaml
+provider:
+  kind: codex
+  model: gpt-5.4
+  extraArgs: []
 ```

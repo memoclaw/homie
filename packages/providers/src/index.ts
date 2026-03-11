@@ -1,55 +1,74 @@
+import type { AccountUsageProvider, ProviderAdapter } from '@homie/core';
+import { createClaudeCodeProvider } from './claude-code';
+import type { CliProviderStatus } from './cli-status';
+import { checkCliStatus } from './cli-status';
+import { checkCodexCli, createCodexProvider } from './codex';
+import { createCodexUsageProvider } from './codex-usage';
+import { createClaudeUsageProvider } from './usage';
+
 export { type ClaudeCodeConfig, createClaudeCodeProvider } from './claude-code';
+export type { CliProviderStatus } from './cli-status';
+export { type CodexConfig, checkCodexCli, createCodexProvider } from './codex';
+export { createCodexUsageProvider } from './codex-usage';
+export { createClaudeUsageProvider } from './usage';
 
-export interface ClaudeCodeStatus {
-  available: boolean;
-  authed: boolean;
-  version?: string;
-  error?: string;
+export type ProviderKind = 'claude-code' | 'codex';
+
+export interface ProviderRuntimeConfig {
+  kind: ProviderKind;
+  model: string;
+  extraArgs?: string[];
 }
 
-/**
- * Check that the `claude` CLI is installed and authenticated.
- * Runs `claude --version` to verify installation, then a minimal
- * print-mode prompt to verify auth.
- */
-export async function checkClaudeCode(): Promise<ClaudeCodeStatus> {
-  // 1. Check installation + version
-  let version: string | undefined;
-  try {
-    const proc = Bun.spawn(['claude', '--version'], {
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-    if (code !== 0) {
-      return { available: false, authed: false, error: 'claude CLI not found' };
-    }
-    version = out.trim();
-  } catch {
-    return { available: false, authed: false, error: 'claude CLI not found' };
-  }
-
-  // 2. Check auth by running a minimal prompt
-  try {
-    const proc = Bun.spawn(
-      ['claude', '-p', 'ping', '--output-format', 'text', '--max-turns', '1'],
-      { stdout: 'pipe', stderr: 'pipe' },
-    );
-    const [, stderr, code] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
-    if (code !== 0) {
-      return { available: true, authed: false, version, error: stderr.trim().slice(0, 200) };
-    }
-    return { available: true, authed: true, version };
-  } catch (err) {
-    return {
-      available: true,
-      authed: false,
-      version,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
+export interface ProviderRuntime {
+  kind: ProviderKind;
+  name: string;
+  adapter: ProviderAdapter;
+  accountUsage?: AccountUsageProvider;
+  check(): Promise<CliProviderStatus>;
 }
+
+interface ProviderRuntimeFactory {
+  name: string;
+  createAdapter(config: ProviderRuntimeConfig): ProviderAdapter;
+  createAccountUsage?(): AccountUsageProvider;
+  check(): Promise<CliProviderStatus>;
+}
+
+export async function checkClaudeCode(): Promise<CliProviderStatus> {
+  return checkCliStatus({
+    command: 'claude',
+    authArgs: ['-p', 'ping', '--output-format', 'text', '--max-turns', '1'],
+    notFoundMessage: 'claude CLI not found',
+  });
+}
+
+export function createProviderRuntime(config: ProviderRuntimeConfig): ProviderRuntime {
+  const factory = PROVIDER_FACTORIES[config.kind];
+  return {
+    kind: config.kind,
+    name: factory.name,
+    adapter: factory.createAdapter(config),
+    accountUsage: factory.createAccountUsage?.(),
+    check: factory.check,
+  };
+}
+
+const PROVIDER_FACTORIES: Record<ProviderKind, ProviderRuntimeFactory> = {
+  'claude-code': {
+    name: 'Claude Code',
+    createAdapter(config) {
+      return createClaudeCodeProvider({ model: config.model, extraArgs: config.extraArgs });
+    },
+    createAccountUsage: createClaudeUsageProvider,
+    check: checkClaudeCode,
+  },
+  codex: {
+    name: 'Codex CLI',
+    createAdapter(config) {
+      return createCodexProvider({ model: config.model, extraArgs: config.extraArgs });
+    },
+    createAccountUsage: createCodexUsageProvider,
+    check: checkCodexCli,
+  },
+};

@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createAgent } from '@homie/agent';
-import { AbortError, type ProviderAdapter } from '@homie/core';
+import { AbortError, type AccountUsageProvider, type ProviderAdapter } from '@homie/core';
 import { schema } from '@homie/persistence/src/migrations';
 import { createSessionStore } from '@homie/persistence/src/session-store';
 import { createTaskStore } from '@homie/persistence/src/task-store';
@@ -66,10 +66,20 @@ describe('CommandHandler', () => {
       usageStore,
     });
 
+    const accountUsage: AccountUsageProvider = {
+      async getAccountUsage() {
+        return [
+          { label: 'Current session', percentUsed: 0, resetsAt: '2026-03-12T12:00:00Z' },
+          { label: 'Current week', percentUsed: 0, resetsAt: '2026-03-18T10:00:00Z' },
+        ];
+      },
+    };
+
     handler = createCommandHandler({
       taskStore,
       taskRunner: runner,
       usageStore,
+      accountUsage,
     });
 
     replies = [];
@@ -105,10 +115,10 @@ describe('CommandHandler', () => {
     expect(replies[0]).toContain('fix the bug');
   });
 
-  test('/status returns uptime', async () => {
+  test('/status returns usage info', async () => {
     const handled = await handler.handle(ctx('status'));
     expect(handled).toBe(true);
-    expect(replies[0]).toContain('Uptime');
+    expect(replies[0]).toContain('Current session 0% used Resets');
   });
 
   test('/abort with no running task', async () => {
@@ -123,51 +133,20 @@ describe('CommandHandler', () => {
     expect(replies[0]).toContain('Commands');
   });
 
-  test('/status shows running task details', async () => {
-    const msgId = await addMessage('deploy feature');
-    const task = await taskStore.createTask({
-      channel: 'telegram',
-      chatId: 'chat1',
-      userId: 'user1',
-      sessionId,
-      messageId: msgId,
-    });
-    await taskStore.updateTaskStatus(task.id, 'running');
-
-    const handled = await handler.handle(ctx('status'));
-    expect(handled).toBe(true);
-    expect(replies[0]).toContain('Running task');
-    expect(replies[0]).toContain('deploy feature');
-  });
-
-  test('/status shows queued task count', async () => {
-    const t1 = await taskStore.createTask({
-      channel: 'telegram',
-      chatId: 'chat1',
-      userId: 'user1',
-      sessionId,
-      messageId: null,
-    });
-    await taskStore.updateTaskStatus(t1.id, 'running');
-
-    await taskStore.createTask({
-      channel: 'telegram',
-      chatId: 'chat1',
-      userId: 'user1',
-      sessionId,
-      messageId: null,
-    });
-    await taskStore.createTask({
-      channel: 'telegram',
-      chatId: 'chat1',
-      userId: 'user1',
-      sessionId,
-      messageId: null,
+  test('/status shows token costs when usage exists', async () => {
+    const usageStore = createUsageStore(db);
+    usageStore.record(sessionId, {
+      inputTokens: 1000,
+      outputTokens: 500,
+      cacheReadTokens: 0,
+      cacheCreateTokens: 0,
+      costUsd: 0.05,
     });
 
     const handled = await handler.handle(ctx('status'));
     expect(handled).toBe(true);
-    expect(replies[0]).toContain('Queued: 2 task(s)');
+    expect(replies[0]).toContain('Token costs: $0.05');
+    expect(replies[0]).toContain('Current week');
   });
 
   test('/list shows status icons', async () => {

@@ -165,7 +165,7 @@ describe('Gateway', () => {
 
     await gateway.handleEvent(event, replyFn);
     expect(replies.length).toBe(1);
-    expect(replies[0]).toContain('Uptime');
+    expect(replies[0]).toContain('No usage data yet.');
     expect(provider.generate).not.toHaveBeenCalled();
   });
 

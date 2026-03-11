@@ -11,7 +11,7 @@ import {
   createUsageStore,
   openDatabase,
 } from '@homie/persistence';
-import { checkClaudeCode, createClaudeCodeProvider } from '@homie/providers';
+import { createProviderRuntime } from '@homie/providers';
 import { createTelegramAdapter } from '@homie/telegram';
 
 const log = createLogger('server');
@@ -36,11 +36,11 @@ async function verifyTelegramToken(
 }
 
 async function main() {
-  const startedAt = new Date();
   const config = loadConfig();
   setLogLevel(config.app.logLevel as 'debug' | 'info' | 'warn' | 'error');
 
   log.info('Starting Homie', {
+    provider: config.provider.kind,
     model: config.provider.model,
     logLevel: config.app.logLevel,
   });
@@ -48,9 +48,11 @@ async function main() {
   // --- Preflight checks (run in parallel) ---
   log.info('Running preflight checks...');
 
-  const [telegramCheck, claudeCheck] = await Promise.all([
+  const providerRuntime = createProviderRuntime(config.provider);
+
+  const [telegramCheck, providerCheck] = await Promise.all([
     verifyTelegramToken(config.telegram.botToken),
-    checkClaudeCode(),
+    providerRuntime.check(),
   ]);
 
   let preflightFailed = false;
@@ -64,18 +66,21 @@ async function main() {
     log.info('Telegram bot verified', { username: telegramCheck.username });
   }
 
-  if (!claudeCheck.available) {
+  if (!providerCheck.available) {
     console.error(
-      '\n  ✗ Claude Code: CLI not found.\n    Install it: https://docs.anthropic.com/en/docs/claude-code\n',
+      `\n  ✗ ${providerRuntime.name}: CLI not found.\n    Install and configure ${providerRuntime.name} before starting Homie.\n`,
     );
     preflightFailed = true;
-  } else if (!claudeCheck.authed) {
+  } else if (!providerCheck.authed) {
     console.error(
-      `\n  ✗ Claude Code: not authenticated.\n    Run \`claude\` to log in.\n    ${claudeCheck.error ? `Detail: ${claudeCheck.error}` : ''}\n`,
+      `\n  ✗ ${providerRuntime.name}: not authenticated.\n    ${providerCheck.error ? `Detail: ${providerCheck.error}` : ''}\n`,
     );
     preflightFailed = true;
   } else {
-    log.info('Claude Code verified', { version: claudeCheck.version });
+    log.info('Provider verified', {
+      provider: providerRuntime.name,
+      version: providerCheck.version,
+    });
   }
 
   if (preflightFailed) {
@@ -109,13 +114,8 @@ async function main() {
     log.info('Reset stuck tasks from previous run', { count: stuckTasks });
   }
 
-  const provider = createClaudeCodeProvider({
-    model: config.provider.model,
-    extraArgs: config.provider.extraArgs,
-  });
-
   // Agent + Gateway
-  const agent = createAgent(provider, {
+  const agent = createAgent(providerRuntime.adapter, {
     model: config.provider.model,
   });
 
@@ -124,8 +124,8 @@ async function main() {
     agent,
     taskStore,
     usageStore,
+    accountUsage: providerRuntime.accountUsage,
     model: config.provider.model,
-    startedAt,
   });
 
   // Telegram

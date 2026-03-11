@@ -4,7 +4,7 @@ Your AI dev mate. Local AI agents, remote control.
 
 > **Warning** — Under active development. Schema and config may change without notice.
 
-A self-hosted agent hub that connects your local AI coding agents to Telegram. Send a message from your phone, Homie runs it on your machine through Claude Code, and sends back the result.
+A self-hosted agent hub that connects your local AI coding agents to Telegram. Send a message from your phone, Homie runs it on your machine through Claude Code or Codex CLI, and sends back the result.
 
 No API keys. No cloud billing. Just your existing CLI subscriptions.
 
@@ -36,7 +36,7 @@ bun link               # makes `homie` available globally
 homie
 ```
 
-Requires [Bun](https://bun.sh) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated. Homie verifies your Telegram token and Claude Code auth on startup before accepting messages.
+Requires [Bun](https://bun.sh) and a supported local agent CLI installed and authenticated. Homie verifies your Telegram token and the configured provider on startup before accepting messages.
 
 ## Every message is a task
 
@@ -59,13 +59,13 @@ Telegram message
     → Gateway (resolve session, route command or submit task)
       → Task runner (queue, execute one at a time per chat)
         → Agent (build message history, call provider)
-          → Claude Code CLI (spawn subprocess, stream JSON)
+          → Provider CLI (spawn subprocess, stream JSON/JSONL)
             → parse response → reply to user
 ```
 
-**Provider.** Homie spawns `claude` with `--output-format stream-json` and streams stdout line by line. It parses tool starts (to show "Reading files..." status), text deltas, token usage, and cost. The subprocess runs with `--dangerously-skip-permissions` so the agent can work autonomously.
+**Provider.** Homie wraps local agent CLIs behind a shared runtime contract. Claude Code uses `--output-format stream-json`; Codex uses `exec --json`. Homie parses streamed events, token usage, and final output, then forwards progress and replies back to Telegram.
 
-**Session continuity.** Each chat gets one hidden session. On the first task, Homie sends the full conversation history. On subsequent tasks, it attempts `--resume` to reuse the agent's cached context. If resume fails, it falls back to replaying full history with `--session-id`. If the agent crashes, Homie waits 3 seconds and retries once.
+**Session continuity.** Each chat gets one hidden session. On the first task, Homie sends the full conversation history. On subsequent tasks, it attempts the provider's native resume flow. If resume fails, it falls back to replaying full history in a fresh run. Claude retries once after a crash; Codex currently fails fast.
 
 **Queue.** One task runs at a time per chat. The rest sit in an in-memory queue (also tracked in SQLite so status survives restarts). When a task finishes, the next one starts automatically. Aborting kills the running task and clears the entire queue.
 
@@ -79,8 +79,17 @@ Telegram message
 |---------|---------|-------------|
 | `telegram.botToken` | — | `TELEGRAM_BOT_TOKEN` env var (required) |
 | `telegram.allowedChatIds` | `[]` | Restrict to specific chats (empty = allow all) |
-| `provider.model` | `""` | Override the agent's default model |
+| `provider.kind` | `claude-code` | Which CLI backend to use: `claude-code` or `codex` |
+| `provider.model` | `""` | Override the provider's default model; leave empty to follow the CLI default |
 | `provider.extraArgs` | `[]` | Extra CLI flags passed to the agent |
+
+Recommended `provider.extraArgs`:
+- `claude-code`: usually leave empty; add flags like `--verbose` only if you need provider-specific behavior
+- `codex`: useful defaults are `["--skip-git-repo-check"]` for non-git directories, or sandbox-related flags if you want stricter execution
+
+Recommended `provider.model`:
+- `claude-code`: pin a Claude model only if you want reproducible behavior
+- `codex`: leave empty by default so Codex CLI can track its preferred default; if you want an explicit pin, use `gpt-5.4`
 
 ## Project structure
 
@@ -93,7 +102,7 @@ packages/
   observability/    Structured JSON logger
   persistence/      SQLite stores — tasks, sessions, messages, usage, kv
   sessions/         Session manager — one session per chat, history, status
-  providers/        Claude Code CLI adapter (spawn, stream, parse, retry)
+  providers/        Provider runtimes for Claude Code and Codex CLI
   agent/            Context builder — system prompt + history → provider messages
   gateway/          Task runner (queue + execute), command handler
   channels/
