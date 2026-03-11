@@ -102,14 +102,13 @@ function mimeFromPath(filePath: string): string {
 
 export function createTelegramAdapter(opts: {
   botToken: string;
-  allowedChatIds: Array<string | number>;
   onEvent: EventHandler;
   dataDir: string;
 }): ChannelAdapter {
   const bot = new Bot(opts.botToken);
   const handler = opts.onEvent;
-  const allowedChatIds = new Set(opts.allowedChatIds.map(String));
   const attachDir = join(opts.dataDir, 'attachments');
+  let authorizedUserId: string | null = null;
   mkdirSync(attachDir, { recursive: true });
 
   // --- Internal helpers (not exposed on the public interface) ---
@@ -206,8 +205,24 @@ export function createTelegramAdapter(opts: {
 
   // --- Shared message dispatch ---
 
-  function isAllowed(chatId: string): boolean {
-    return allowedChatIds.size === 0 || allowedChatIds.has(chatId);
+  function authorizeUser(userId: string | null, chatId: string): boolean {
+    if (!userId) {
+      log.warn('Rejected Telegram update without sender', { chatId });
+      return false;
+    }
+
+    if (!authorizedUserId) {
+      authorizedUserId = userId;
+      log.info('Authorized first Telegram user', { chatId, userId });
+      return true;
+    }
+
+    if (authorizedUserId !== userId) {
+      log.warn('Rejected message from unauthorized Telegram user', { chatId, userId });
+      return false;
+    }
+
+    return true;
   }
 
   function buildReplyAndProgress(chatId: string) {
@@ -231,8 +246,7 @@ export function createTelegramAdapter(opts: {
     const text = ctx.message.text;
     const messageId = String(ctx.message.message_id);
 
-    if (!isAllowed(chatId)) {
-      log.warn('Rejected message from unauthorized chat', { chatId });
+    if (!authorizeUser(userId, chatId)) {
       return;
     }
 
@@ -245,7 +259,6 @@ export function createTelegramAdapter(opts: {
           type: 'command',
           channel: 'telegram',
           chatId,
-          userId,
           command: cmdMatch[1] ?? '',
           args: (cmdMatch[2] ?? '').trim(),
           rawSourceId: messageId,
@@ -257,7 +270,7 @@ export function createTelegramAdapter(opts: {
     }
 
     await dispatch(
-      { type: 'chat', channel: 'telegram', chatId, userId, text, rawSourceId: messageId },
+      { type: 'chat', channel: 'telegram', chatId, text, rawSourceId: messageId },
       chatId,
     );
   });
@@ -268,7 +281,7 @@ export function createTelegramAdapter(opts: {
     const messageId = String(ctx.message.message_id);
     const caption = ctx.message.caption ?? '';
 
-    if (!isAllowed(chatId)) return;
+    if (!authorizeUser(userId, chatId)) return;
 
     // Telegram sends multiple sizes — pick the largest
     const photos = ctx.message.photo;
@@ -286,7 +299,6 @@ export function createTelegramAdapter(opts: {
         type: 'chat',
         channel: 'telegram',
         chatId,
-        userId,
         text: caption || 'Analyze this image',
         rawSourceId: messageId,
         attachments: [attachment],
@@ -302,7 +314,7 @@ export function createTelegramAdapter(opts: {
     const caption = ctx.message.caption ?? '';
     const doc = ctx.message.document;
 
-    if (!isAllowed(chatId)) return;
+    if (!authorizeUser(userId, chatId)) return;
 
     const attachment = await downloadFile(doc.file_id, doc.file_name ?? undefined);
     if (!attachment) {
@@ -315,7 +327,6 @@ export function createTelegramAdapter(opts: {
         type: 'chat',
         channel: 'telegram',
         chatId,
-        userId,
         text: caption || `Review this file: ${doc.file_name ?? 'document'}`,
         rawSourceId: messageId,
         attachments: [attachment],
@@ -336,9 +347,9 @@ export function createTelegramAdapter(opts: {
 
       try {
         await bot.api.setMyCommands([
-          { command: 'list', description: 'Recent tasks' },
-          { command: 'status', description: 'System status & running task' },
-          { command: 'abort', description: 'Cancel running task' },
+          { command: 'status', description: 'Current request status' },
+          { command: 'abort', description: 'Interrupt active request' },
+          { command: 'clear', description: 'Start a new session' },
           { command: 'help', description: 'Show help' },
         ]);
       } catch (err) {

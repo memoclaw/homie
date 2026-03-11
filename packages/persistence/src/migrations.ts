@@ -3,11 +3,20 @@ export const schema = `
     id TEXT PRIMARY KEY,
     channel TEXT NOT NULL,
     chat_id TEXT NOT NULL,
-    user_id TEXT,
-    status TEXT NOT NULL DEFAULT 'idle',
     created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sessions_chat_created
+    ON sessions(channel, chat_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS active_sessions (
+    channel TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    UNIQUE(channel, chat_id)
+    PRIMARY KEY (channel, chat_id),
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
 
   CREATE TABLE IF NOT EXISTS messages (
@@ -17,53 +26,9 @@ export const schema = `
     text TEXT NOT NULL,
     created_at TEXT NOT NULL,
     raw_source_id TEXT,
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
 
   CREATE INDEX IF NOT EXISTS idx_messages_session_time
     ON messages(session_id, created_at);
-
-  CREATE TABLE IF NOT EXISTS tasks (
-    id TEXT PRIMARY KEY,
-    channel TEXT NOT NULL,
-    chat_id TEXT NOT NULL,
-    user_id TEXT,
-    session_id TEXT NOT NULL,
-    message_id TEXT,
-    status TEXT NOT NULL DEFAULT 'queued',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES sessions(id),
-    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_tasks_status
-    ON tasks(channel, chat_id, status);
-
-  CREATE TABLE IF NOT EXISTS usage_log (
-    id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL,
-    task_id TEXT,
-    input_tokens INTEGER NOT NULL DEFAULT 0,
-    output_tokens INTEGER NOT NULL DEFAULT 0,
-    cache_read_tokens INTEGER NOT NULL DEFAULT 0,
-    cache_create_tokens INTEGER NOT NULL DEFAULT 0,
-    cost_usd REAL,
-    model TEXT,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES sessions(id),
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_usage_log_session
-    ON usage_log(session_id);
-
-  CREATE INDEX IF NOT EXISTS idx_usage_log_created
-    ON usage_log(created_at);
-
-  CREATE TABLE IF NOT EXISTS kv (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
 `;

@@ -14,7 +14,7 @@ YAML configuration loader with environment variable interpolation and zod valida
 | Section    | Key fields                              |
 | ---------- | --------------------------------------- |
 | `app`      | `logLevel`, `dataDir`                   |
-| `telegram` | `botToken`, `allowedChatIds`            |
+| `telegram` | `botToken`                              |
 | `provider` | `kind`, `model`, `extraArgs`            |
 
 ## Usage

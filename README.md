@@ -13,7 +13,6 @@ No API keys. No cloud billing. Just your existing CLI subscriptions.
 - **Remote control** — Telegram is your interface, your machine does the work
 - **Local agents** — wraps CLI agents you already have (Claude Code today, more coming)
 - **Zero API cost** — rides your existing subscriptions, no billing keys needed
-- **Async by design** — fire and forget, check results when you're ready
 - **Self-hosted** — your machine, your data, your agents
 
 ## Install
@@ -38,16 +37,16 @@ homie
 
 Requires [Bun](https://bun.sh) and a supported local agent CLI installed and authenticated. Homie verifies your Telegram token and the configured provider on startup before accepting messages.
 
-## Every message is a task
+## Every message is a priority request
 
-Every message you send becomes a task. Homie runs it and replies with the result.
+Every message you send starts a request. Homie runs it and replies with the result. Send a photo or file and Homie downloads it to a temp path so the agent can read it natively.
 
-If Homie is already working on something, your message gets queued and runs next — up to 10 deep. Send a photo or file and Homie downloads it to a temp path so the agent can read it natively.
+The first Telegram user to message the bot becomes the only allowed user until Homie restarts.
 
 ```
-/list            Recent tasks and their status
-/status          Running task, queue, and uptime
-/abort           Cancel the running task and clear the queue
+/status          Current request
+/abort           Interrupt the active request
+/clear           Start a new session
 /help            Show commands
 ```
 
@@ -56,20 +55,22 @@ If Homie is already working on something, your message gets queued and runs next
 ```
 Telegram message
   → Adapter (parse text, photos, documents)
-    → Gateway (resolve session, route command or submit task)
-      → Task runner (queue, execute one at a time per chat)
+    → Gateway (resolve active session, route command or submit request)
+      → Request runner (interrupt previous request, execute latest request per chat)
         → Agent (build message history, call provider)
           → Provider CLI (spawn subprocess, stream JSON/JSONL)
             → parse response → reply to user
 ```
 
-**Provider.** Homie wraps local agent CLIs behind a shared runtime contract. Claude Code uses `--output-format stream-json`; Codex uses `exec --json`. Homie parses streamed events, token usage, and final output, then forwards progress and replies back to Telegram.
+**Provider.** Homie wraps local agent CLIs behind a shared runtime contract. Claude Code uses `--output-format stream-json`; Codex uses `exec --json`. Homie parses streamed events and final output, then forwards progress and replies back to Telegram.
 
-**Session continuity.** Each chat gets one hidden session. On the first task, Homie sends the full conversation history. On subsequent tasks, it attempts the provider's native resume flow. If resume fails, it falls back to replaying full history in a fresh run. Claude retries once after a crash; Codex currently fails fast.
+**Session continuity.** Each chat has one active session. On the first request in a session, Homie sends the full conversation history. On subsequent requests, it attempts the provider's native resume flow. If resume fails, it falls back to replaying full history in a fresh request. Claude retries once after a crash; Codex currently fails fast.
 
-**Queue.** One task runs at a time per chat. The rest sit in an in-memory queue (also tracked in SQLite so status survives restarts). When a task finishes, the next one starts automatically. Aborting kills the running task and clears the entire queue.
+**Interrupt-first flow.** One request is active per chat. A new message interrupts the active request and starts a fresh request immediately. Interrupted partial output is not added to conversation history.
 
-**Progress.** While a task runs, Homie sends typing indicators every 4 seconds and a status message every 30 seconds showing elapsed time and what the agent is doing ("Reading files...", "Editing code...", "Running commands...").
+**Fresh context.** `/clear` starts a brand new session for the chat without deleting old history. The next message runs from empty context.
+
+**Progress.** While a request is active, Homie sends typing indicators every 4 seconds and a status message every 30 seconds showing elapsed time and what the agent is doing ("Reading files...", "Editing code...", "Running commands...").
 
 ## Configure
 
@@ -78,7 +79,6 @@ Telegram message
 | Setting | Default | What it does |
 |---------|---------|-------------|
 | `telegram.botToken` | — | `TELEGRAM_BOT_TOKEN` env var (required) |
-| `telegram.allowedChatIds` | `[]` | Restrict to specific chats (empty = allow all) |
 | `provider.kind` | `claude-code` | Which CLI backend to use: `claude-code` or `codex` |
 | `provider.model` | `""` | Override the provider's default model; leave empty to follow the CLI default |
 | `provider.extraArgs` | `[]` | Extra CLI flags passed to the agent |
@@ -97,14 +97,13 @@ Recommended `provider.model`:
 src/                  Boot, preflight checks, wiring, graceful shutdown
 bin/                  CLI entry point (homie)
 packages/
-  core/             Types (Task, Session, Message), interfaces, errors
+  core/             Types (Session, Message), interfaces, errors
   config/           YAML loader with ${ENV_VAR} interpolation (zod)
   observability/    Structured JSON logger
-  persistence/      SQLite stores — tasks, sessions, messages, usage, kv
-  sessions/         Session manager — one session per chat, history, status
+  persistence/      SQLite stores — sessions, active sessions, messages
   providers/        Provider runtimes for Claude Code and Codex CLI
   agent/            Context builder — system prompt + history → provider messages
-  gateway/          Task runner (queue + execute), command handler
+  gateway/          Request runner (interrupt + execute), command handler
   channels/
     telegram/       Grammy adapter — polling, photos, documents, markdown
 ```

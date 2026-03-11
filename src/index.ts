@@ -5,12 +5,7 @@ import { loadConfig } from '@homie/config';
 import { getErrorMessage } from '@homie/core';
 import { createGateway } from '@homie/gateway';
 import { createLogger, setLogLevel } from '@homie/observability';
-import {
-  createSessionStore,
-  createTaskStore,
-  createUsageStore,
-  openDatabase,
-} from '@homie/persistence';
+import { createSessionStore, openDatabase } from '@homie/persistence';
 import { createProviderRuntime } from '@homie/providers';
 import { createTelegramAdapter } from '@homie/telegram';
 
@@ -99,20 +94,6 @@ async function main() {
 
   // Stores
   const sessionStore = createSessionStore(db);
-  const usageStore = createUsageStore(db);
-  const taskStore = createTaskStore(db);
-
-  // Reset stuck state from previous run
-  const [stuck, stuckTasks] = await Promise.all([
-    sessionStore.resetStuckSessions(),
-    taskStore.resetStuckTasks(),
-  ]);
-  if (stuck > 0) {
-    log.info('Reset stuck sessions from previous run', { count: stuck });
-  }
-  if (stuckTasks > 0) {
-    log.info('Reset stuck tasks from previous run', { count: stuckTasks });
-  }
 
   // Agent + Gateway
   const agent = createAgent(providerRuntime.adapter, {
@@ -122,16 +103,11 @@ async function main() {
   const gateway = createGateway({
     sessionStore,
     agent,
-    taskStore,
-    usageStore,
-    accountUsage: providerRuntime.accountUsage,
-    model: config.provider.model,
   });
 
   // Telegram
   const telegram = createTelegramAdapter({
     botToken: config.telegram.botToken,
-    allowedChatIds: config.telegram.allowedChatIds,
     onEvent: gateway.handleEvent,
     dataDir,
   });

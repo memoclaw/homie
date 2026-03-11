@@ -2,14 +2,14 @@
 
 Shared types, interfaces, and error classes used across all Homie packages.
 
-Defines the contracts between channels, providers, and persistence — any local agent CLI or messaging platform plugs in through these interfaces.
+Defines the contracts between channels, providers, and persistence.
 
 ## Exports
 
 ### Types
 
-- `Session`, `Message`, `Task`, `UsageStats` — domain models
-- `SessionStatus`, `MessageDirection`, `TaskStatus` — union types
+- `Session`, `Message` — domain models
+- `MessageDirection` — union types
 - `Attachment` — file attachment metadata
 - `InboundEvent`, `ChatMessageEvent`, `CommandEvent` — inbound event types
 
@@ -18,7 +18,6 @@ Defines the contracts between channels, providers, and persistence — any local
 - `ChannelAdapter` — start/stop/sendMessage for a messaging platform
 - `ProviderAdapter` — generate responses from a local agent CLI
 - `SessionStore` — persistence interface for sessions and messages
-- `TaskStore` — persistence interface for task queue and history
 - `EventHandler`, `ReplyFn`, `ProgressHandler`, `ProgressCallback` — callback types
 - `ProviderRequest`, `ProviderResponse` — provider I/O
 
@@ -31,6 +30,6 @@ Defines the contracts between channels, providers, and persistence — any local
 ## Usage
 
 ```ts
-import type { Session, Task, ChannelAdapter, ProviderAdapter } from '@homie/core';
+import type { Session, Message, ChannelAdapter, ProviderAdapter } from '@homie/core';
 import { ProviderError, getErrorMessage } from '@homie/core';
 ```

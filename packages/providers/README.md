@@ -8,14 +8,13 @@ Each provider wraps a local CLI agent as a subprocess — no API keys or billing
 
 ### Claude Code
 
-Wraps the local `claude` CLI with streaming JSON output, session resume, crash recovery, and account usage support.
+Wraps the local `claude` CLI with streaming JSON output, session resume, and crash recovery.
 
 - Session continuity via `--resume` / `--session-id`
 - Resume failure fallback: retries with full flattened history
 - Crash recovery: 1 retry with 3s backoff, respects abort signals
 - Streaming progress events (tool use, text deltas)
 - Auth and availability checks via `checkClaudeCode()`
-- Account usage via `createClaudeUsageProvider()`
 
 Recommended `extraArgs`:
 - Usually empty
@@ -23,13 +22,12 @@ Recommended `extraArgs`:
 
 ### Codex CLI
 
-Wraps the local `codex` CLI with JSONL output, resume support, and account usage from persisted session rate-limit snapshots.
+Wraps the local `codex` CLI with JSONL output and resume support.
 
 - Session continuity via `codex exec resume`
 - Resume failure fallback: retries with full flattened history
-- Streaming final agent output and token usage
+- Streaming final agent output
 - Auth and availability checks via `checkCodexCli()`
-- Account usage via `createCodexUsageProvider()`
 
 Recommended `extraArgs`:
 - `--skip-git-repo-check` if you want Homie to work outside git repos

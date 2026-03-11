@@ -7,7 +7,7 @@ Telegram channel adapter using [grammy](https://grammy.dev) in polling mode. Fir
 - Text messages, photos, and documents with automatic file download
 - Markdown to Telegram MarkdownV2 conversion with fallback to plain text
 - Typing indicators and editable status messages for progress
-- Chat ID allowlisting (empty list = allow all)
+- First-user lock in memory for simple single-user access control
 - Bot command registration on startup
 
 ## Usage
@@ -17,7 +17,6 @@ import { createTelegramAdapter } from '@homie/telegram';
 
 const telegram = createTelegramAdapter({
   botToken: process.env.TELEGRAM_BOT_TOKEN,
-  allowedChatIds: [],
   onEvent: gateway.handleEvent,
   dataDir: './data',
 });

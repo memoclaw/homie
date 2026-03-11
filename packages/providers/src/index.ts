@@ -1,16 +1,12 @@
-import type { AccountUsageProvider, ProviderAdapter } from '@homie/core';
+import type { ProviderAdapter } from '@homie/core';
 import { createClaudeCodeProvider } from './claude-code';
 import type { CliProviderStatus } from './cli-status';
 import { checkCliStatus } from './cli-status';
 import { checkCodexCli, createCodexProvider } from './codex';
-import { createCodexUsageProvider } from './codex-usage';
-import { createClaudeUsageProvider } from './usage';
 
 export { type ClaudeCodeConfig, createClaudeCodeProvider } from './claude-code';
 export type { CliProviderStatus } from './cli-status';
 export { type CodexConfig, checkCodexCli, createCodexProvider } from './codex';
-export { createCodexUsageProvider } from './codex-usage';
-export { createClaudeUsageProvider } from './usage';
 
 export type ProviderKind = 'claude-code' | 'codex';
 
@@ -24,14 +20,12 @@ export interface ProviderRuntime {
   kind: ProviderKind;
   name: string;
   adapter: ProviderAdapter;
-  accountUsage?: AccountUsageProvider;
   check(): Promise<CliProviderStatus>;
 }
 
 interface ProviderRuntimeFactory {
   name: string;
   createAdapter(config: ProviderRuntimeConfig): ProviderAdapter;
-  createAccountUsage?(): AccountUsageProvider;
   check(): Promise<CliProviderStatus>;
 }
 
@@ -49,7 +43,6 @@ export function createProviderRuntime(config: ProviderRuntimeConfig): ProviderRu
     kind: config.kind,
     name: factory.name,
     adapter: factory.createAdapter(config),
-    accountUsage: factory.createAccountUsage?.(),
     check: factory.check,
   };
 }
@@ -60,7 +53,6 @@ const PROVIDER_FACTORIES: Record<ProviderKind, ProviderRuntimeFactory> = {
     createAdapter(config) {
       return createClaudeCodeProvider({ model: config.model, extraArgs: config.extraArgs });
     },
-    createAccountUsage: createClaudeUsageProvider,
     check: checkClaudeCode,
   },
   codex: {
@@ -68,7 +60,6 @@ const PROVIDER_FACTORIES: Record<ProviderKind, ProviderRuntimeFactory> = {
     createAdapter(config) {
       return createCodexProvider({ model: config.model, extraArgs: config.extraArgs });
     },
-    createAccountUsage: createCodexUsageProvider,
     check: checkCodexCli,
   },
 };

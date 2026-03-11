@@ -6,7 +6,7 @@ Orchestrates provider calls with context assembly. Provider-agnostic — works w
 
 1. Builds a message list from system prompt, history, and user input (`buildMessages`)
 2. Sends to the provider (any local agent CLI) and streams progress
-3. Returns text, usage stats, and resume status
+3. Returns text and resume status
 
 ## Usage
 
@@ -23,5 +23,5 @@ const result = await agent.run({
   signal: controller.signal,
 });
 
-// result.text, result.usage
+// result.text
 ```

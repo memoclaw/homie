@@ -1,10 +1,4 @@
-import type {
-  Message,
-  ProgressCallback,
-  ProviderAdapter,
-  ProviderMessage,
-  UsageStats,
-} from '@homie/core';
+import type { Message, ProgressCallback, ProviderAdapter, ProviderMessage } from '@homie/core';
 import { createLogger } from '@homie/observability';
 
 const log = createLogger('agent');
@@ -17,7 +11,6 @@ export interface AgentInput {
   history: Message[];
   /** When true, skip resume and send full history (e.g. after an interrupted run) */
   forceFullHistory?: boolean;
-  userId?: string;
   onProgress?: ProgressCallback;
   /** Signal to abort the in-flight agent run */
   signal?: AbortSignal;
@@ -25,7 +18,6 @@ export interface AgentInput {
 
 export interface AgentOutput {
   text: string;
-  usage?: UsageStats;
   /** False when session resume failed and full history was re-sent */
   resumed?: boolean;
 }
@@ -58,12 +50,10 @@ export function createAgent(provider: ProviderAdapter, config: AgentConfig): Age
 
       log.info('Agent run completed', {
         sessionId: input.sessionId,
-        costUsd: response.usage?.costUsd,
       });
 
       return {
         text,
-        usage: response.usage,
         resumed: response.resumed,
       };
     },

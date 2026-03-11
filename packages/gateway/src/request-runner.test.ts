@@ -4,9 +4,7 @@ import { createAgent } from '@homie/agent';
 import { AbortError, type ProviderAdapter } from '@homie/core';
 import { schema } from '@homie/persistence/src/migrations';
 import { createSessionStore } from '@homie/persistence/src/session-store';
-import { createTaskStore } from '@homie/persistence/src/task-store';
-import { createUsageStore } from '@homie/persistence/src/usage-store';
-import { createTaskRunner, type TaskRunner } from './task-runner';
+import { createRequestRunner, type RequestRunner } from './request-runner';
 
 function createTestDb(): Database {
   const db = new Database(':memory:');
@@ -15,41 +13,29 @@ function createTestDb(): Database {
   return db;
 }
 
-describe('TaskRunner', () => {
+describe('RequestRunner', () => {
   let db: Database;
-  let runner: TaskRunner;
-  let taskStore: ReturnType<typeof createTaskStore>;
+  let runner: RequestRunner;
+  let sessionStore: ReturnType<typeof createSessionStore>;
   let sessionId: string;
   let provider: ProviderAdapter;
 
   beforeEach(async () => {
     db = createTestDb();
-    const sessionStore = createSessionStore(db);
-    const usageStore = createUsageStore(db);
-    taskStore = createTaskStore(db);
-
-    const session = await sessionStore.getOrCreateByChat('telegram', 'chat1', 'user1');
+    sessionStore = createSessionStore(db);
+    const session = await sessionStore.getOrCreateActiveByChat('telegram', 'chat1');
     sessionId = session.id;
 
     provider = {
       generate: mock(async () => ({
         content: 'done',
-        usage: {
-          inputTokens: 10,
-          outputTokens: 5,
-          cacheReadTokens: 0,
-          cacheCreateTokens: 0,
-          costUsd: 0.001,
-        },
       })),
     };
     const agent = createAgent(provider, { model: 'test' });
 
-    runner = createTaskRunner({
+    runner = createRequestRunner({
       sessionStore,
       agent,
-      taskStore,
-      usageStore,
     });
   });
 
@@ -63,8 +49,6 @@ describe('TaskRunner', () => {
       params: {
         channel: 'telegram',
         chatId: 'chat1',
-        userId: 'user1' as string | null,
-        sessionId,
         text,
         rawSourceId: null as string | null,
         reply: async (t: string) => {
@@ -76,7 +60,34 @@ describe('TaskRunner', () => {
   }
 
   describe('submit', () => {
-    test('executes task and replies with result', async () => {
+    test('resolves the active session internally', async () => {
+      const freshDb = createTestDb();
+      const freshStore = createSessionStore(freshDb);
+      const isolatedRunner = createRequestRunner({
+        sessionStore: freshStore,
+        agent: createAgent(provider, { model: 'test' }),
+      });
+      const replies: string[] = [];
+
+      await isolatedRunner.submit({
+        channel: 'telegram',
+        chatId: 'new-chat',
+        text: 'hello',
+        rawSourceId: null,
+        reply: async (text) => {
+          replies.push(text);
+        },
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const session = await freshStore.getOrCreateActiveByChat('telegram', 'new-chat');
+      const messages = await freshStore.listRecentMessages(session.id, 10);
+      expect(messages).toHaveLength(2);
+      expect(replies).toContain('done');
+      freshDb.close();
+    });
+
+    test('executes request and replies with result', async () => {
       const { params, replies } = submitParams('hello');
       await runner.submit(params);
       // Wait for async execution
@@ -86,18 +97,18 @@ describe('TaskRunner', () => {
       expect(replies).toContain('done');
     });
 
-    test('creates task record in DB', async () => {
+    test('stores conversation messages in DB', async () => {
       const { params } = submitParams('build feature');
       await runner.submit(params);
       await new Promise((r) => setTimeout(r, 50));
 
-      const tasks = await taskStore.listTasks('telegram', 'chat1');
-      expect(tasks.length).toBe(1);
-      expect(tasks[0]?.text).toBe('build feature');
-      expect(tasks[0]?.status).toBe('done');
+      const messages = await sessionStore.listRecentMessages(sessionId, 10);
+      expect(messages).toHaveLength(2);
+      expect(messages[0]?.text).toBe('build feature');
+      expect(messages[1]?.text).toBe('done');
     });
 
-    test('sets task to failed on provider error', async () => {
+    test('replies with generic failure on provider error', async () => {
       (provider.generate as ReturnType<typeof mock>).mockImplementation(async () => {
         throw new Error('boom');
       });
@@ -106,135 +117,106 @@ describe('TaskRunner', () => {
       await runner.submit(params);
       await new Promise((r) => setTimeout(r, 50));
 
-      const tasks = await taskStore.listTasks('telegram', 'chat1');
-      expect(tasks[0]?.status).toBe('failed');
       expect(replies).toContain('Something went wrong. Please try again.');
     });
   });
 
-  describe('queue', () => {
-    test('queues second task while first is running', async () => {
-      // Make first task slow
+  describe('interrupts', () => {
+    test('new message interrupts active request and starts immediately', async () => {
       let resolveFirst: (() => void) | undefined;
-      const firstDone = new Promise<void>((r) => {
+      const firstBlocked = new Promise<void>((r) => {
         resolveFirst = r;
       });
-      (provider.generate as ReturnType<typeof mock>).mockImplementationOnce(async () => {
-        await firstDone;
-        return { content: 'first done', usage: undefined };
-      });
+      (provider.generate as ReturnType<typeof mock>).mockImplementationOnce(
+        async ({ signal }: { signal?: AbortSignal }) => {
+          await new Promise<void>((resolve, reject) => {
+            if (signal?.aborted) {
+              reject(new AbortError());
+              return;
+            }
+            signal?.addEventListener('abort', () => reject(new AbortError()), { once: true });
+            firstBlocked.then(resolve);
+          });
+          if (signal?.aborted) {
+            throw new AbortError();
+          }
+          return { content: 'first done' };
+        },
+      );
 
       const { params: p1, replies: r1 } = submitParams('first');
       const { params: p2, replies: r2 } = submitParams('second');
 
-      await runner.submit(p1);
+      const firstSubmit = runner.submit(p1);
+      await new Promise((r) => setTimeout(r, 10));
       await runner.submit(p2);
-
-      // Second should be queued
-      expect(r2).toContain('Queued (position 1). Will start when the current task finishes.');
-
-      // Resolve first
       resolveFirst?.();
+      await firstSubmit;
       await new Promise((r) => setTimeout(r, 100));
 
-      // First should have completed
-      expect(r1).toContain('first done');
-      // Second should also complete after drain
+      expect(r1).not.toContain('first done');
       expect(r2).toContain('done');
-    });
-
-    test('shows correct queue position', async () => {
-      // Block first task
-      (provider.generate as ReturnType<typeof mock>).mockImplementationOnce(
-        () => new Promise(() => {}), // never resolves
-      );
-
-      const { params: p1 } = submitParams('first');
-      await runner.submit(p1);
-
-      const { params: p2, replies: r2 } = submitParams('second');
-      const { params: p3, replies: r3 } = submitParams('third');
-
-      await runner.submit(p2);
-      await runner.submit(p3);
-
-      expect(r2[0]).toContain('position 1');
-      expect(r3[0]).toContain('position 2');
+      const messages = await sessionStore.listRecentMessages(sessionId, 10);
+      expect(messages).toHaveLength(3);
+      expect(messages[0]?.text).toBe('first');
+      expect(messages[1]?.text).toBe('second');
+      expect(messages[2]?.text).toBe('done');
     });
   });
 
   describe('abort', () => {
-    test('returns false if no running task', async () => {
+    test('returns false if no active request', async () => {
       const result = await runner.abort('telegram', 'chat1');
       expect(result).toBe(false);
     });
 
-    test('aborts running task', async () => {
-      // Block task
+    test('aborts active request', async () => {
       (provider.generate as ReturnType<typeof mock>).mockImplementationOnce(
         async ({ signal }: { signal?: AbortSignal }) => {
           await new Promise((_resolve, reject) => {
             if (signal?.aborted) return reject(new AbortError());
             signal?.addEventListener('abort', () => reject(new AbortError()));
           });
-          return { content: '', usage: undefined };
+          return { content: '' };
         },
       );
-
       const { params } = submitParams();
-      await runner.submit(params);
+      const firstSubmit = runner.submit(params);
+      await new Promise((r) => setTimeout(r, 10));
 
       const result = await runner.abort('telegram', 'chat1');
       expect(result).toBe(true);
-
-      await new Promise((r) => setTimeout(r, 50));
-
-      const tasks = await taskStore.listTasks('telegram', 'chat1');
-      expect(tasks[0]?.status).toBe('aborted');
+      await firstSubmit;
     });
+  });
 
-    test('clears queued tasks on abort', async () => {
-      // Block first task
+  describe('resetSession', () => {
+    test('rotates the active session and clears active request state', async () => {
       (provider.generate as ReturnType<typeof mock>).mockImplementationOnce(
         async ({ signal }: { signal?: AbortSignal }) => {
           await new Promise((_resolve, reject) => {
             if (signal?.aborted) return reject(new AbortError());
             signal?.addEventListener('abort', () => reject(new AbortError()));
           });
-          return { content: '', usage: undefined };
+          return { content: '' };
         },
       );
 
-      const { params: p1 } = submitParams('first');
-      const { params: p2 } = submitParams('second');
-      const { params: p3 } = submitParams('third');
+      const original = await sessionStore.getOrCreateActiveByChat('telegram', 'chat1');
+      const { params } = submitParams();
+      const firstSubmit = runner.submit(params);
+      await new Promise((r) => setTimeout(r, 10));
 
-      await runner.submit(p1);
-      await runner.submit(p2);
-      await runner.submit(p3);
+      await runner.resetSession('telegram', 'chat1');
 
-      await runner.abort('telegram', 'chat1');
-      await new Promise((r) => setTimeout(r, 50));
-
-      // All tasks should be aborted
-      const tasks = await taskStore.listTasks('telegram', 'chat1');
-      for (const task of tasks) {
-        expect(task.status).toBe('aborted');
-      }
+      const next = await sessionStore.getOrCreateActiveByChat('telegram', 'chat1');
+      expect(next.id).not.toBe(original.id);
+      expect(runner.getStatus('telegram', 'chat1')).toBeNull();
+      await firstSubmit;
     });
   });
 
   describe('session state', () => {
-    test('session returns to idle after task completes', async () => {
-      const { params } = submitParams();
-      await runner.submit(params);
-      await new Promise((r) => setTimeout(r, 50));
-
-      const sessionStore = createSessionStore(db);
-      const session = await sessionStore.getById(sessionId);
-      expect(session?.status).toBe('idle');
-    });
-
     test('messages saved to session history', async () => {
       const { params } = submitParams('hello agent');
       await runner.submit(params);

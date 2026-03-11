@@ -1,62 +1,22 @@
 import type { Database } from 'bun:sqlite';
-import type { Message, Session, SessionStatus, SessionStore } from '@homie/core';
+import type { Message, Session, SessionStore } from '@homie/core';
 
 export function createSessionStore(db: Database): SessionStore {
   return {
-    async getOrCreateByChat(channel, chatId, userId) {
+    async getOrCreateActiveByChat(channel, chatId) {
       const existing = db
-        .query('SELECT * FROM sessions WHERE channel = ? AND chat_id = ? LIMIT 1')
+        .query(
+          `SELECT s.* FROM active_sessions a
+           JOIN sessions s ON s.id = a.session_id
+           WHERE a.channel = ? AND a.chat_id = ? LIMIT 1`,
+        )
         .get(channel, chatId) as SessionRow | null;
       if (existing) return rowToSession(existing);
-
-      const now = new Date().toISOString();
-      const id = crypto.randomUUID();
-      const session: Session = {
-        id,
-        channel,
-        chatId,
-        userId: userId ?? null,
-        status: 'idle',
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      db.prepare(
-        `INSERT INTO sessions (id, channel, chat_id, user_id, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        session.id,
-        session.channel,
-        session.chatId,
-        session.userId,
-        session.status,
-        session.createdAt,
-        session.updatedAt,
-      );
-
-      return session;
+      return createSession(db, channel, chatId);
     },
 
-    async getById(sessionId) {
-      const row = db
-        .query('SELECT * FROM sessions WHERE id = ?')
-        .get(sessionId) as SessionRow | null;
-      return row ? rowToSession(row) : null;
-    },
-
-    async setSessionStatus(sessionId, status) {
-      db.prepare('UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?').run(
-        status,
-        new Date().toISOString(),
-        sessionId,
-      );
-    },
-
-    async resetStuckSessions() {
-      const result = db
-        .prepare("UPDATE sessions SET status = 'idle' WHERE status = 'processing'")
-        .run();
-      return result.changes;
+    async startFreshSession(channel, chatId) {
+      return createSession(db, channel, chatId);
     },
 
     async addMessage(sessionId, direction, text, rawSourceId) {
@@ -101,11 +61,6 @@ export function createSessionStore(db: Database): SessionStore {
 
       return rows.reverse().map(rowToMessage);
     },
-
-    async countSessions() {
-      const row = db.query('SELECT COUNT(*) as count FROM sessions').get() as { count: number };
-      return row.count;
-    },
   };
 }
 
@@ -115,8 +70,6 @@ interface SessionRow {
   id: string;
   channel: string;
   chat_id: string;
-  user_id: string | null;
-  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -126,8 +79,6 @@ function rowToSession(row: SessionRow): Session {
     id: row.id,
     channel: row.channel,
     chatId: row.chat_id,
-    userId: row.user_id,
-    status: (row.status ?? 'idle') as SessionStatus,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -151,4 +102,31 @@ function rowToMessage(row: MessageRow): Message {
     createdAt: row.created_at,
     rawSourceId: row.raw_source_id,
   };
+}
+
+function createSession(db: Database, channel: string, chatId: string): Session {
+  const now = new Date().toISOString();
+  const session: Session = {
+    id: crypto.randomUUID(),
+    channel,
+    chatId,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO sessions (id, channel, chat_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(session.id, session.channel, session.chatId, session.createdAt, session.updatedAt);
+
+    db.prepare(
+      `INSERT INTO active_sessions (channel, chat_id, session_id, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(channel, chat_id)
+       DO UPDATE SET session_id = excluded.session_id, updated_at = excluded.updated_at`,
+    ).run(channel, chatId, session.id, now);
+  })();
+
+  return session;
 }

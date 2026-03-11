@@ -7,7 +7,6 @@ export const AppConfigSchema = z.object({
   }),
   telegram: z.object({
     botToken: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
-    allowedChatIds: z.array(z.union([z.string(), z.number()])).default([]),
   }),
   provider: z.object({
     kind: z.enum(['claude-code', 'codex']).default('claude-code'),

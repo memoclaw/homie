@@ -3,14 +3,12 @@ import type {
   ProviderAdapter,
   ProviderRequest,
   ProviderResponse,
-  UsageStats,
 } from '@homie/core';
 import { AbortError, ProviderError } from '@homie/core';
 import { createLogger } from '@homie/observability';
 import type { CliProviderStatus } from './cli-status';
 import { checkCliStatus } from './cli-status';
 import { extractLastUserMessage, flattenMessages } from './messages';
-import { asNumber } from './parse';
 
 const log = createLogger('provider:codex');
 
@@ -44,7 +42,7 @@ export function createCodexProvider(config: CodexConfig): ProviderAdapter {
       let resumed = true;
 
       const tryResume = Boolean(input.sessionId && input.hasHistory);
-      if (result.content === null && tryResume) {
+      if (result.content === null && tryResume && !input.signal?.aborted) {
         log.info('Resume failed, retrying with full history', {
           sessionId: input.sessionId,
           exitCode: result.exitCode,
@@ -75,7 +73,6 @@ export function createCodexProvider(config: CodexConfig): ProviderAdapter {
 
       return {
         content: result.content,
-        usage: result.usage,
         resumed: tryResume ? resumed : undefined,
       };
     },
@@ -119,7 +116,6 @@ interface SpawnResult {
   exitCode: number;
   stderr: string;
   content: string | null;
-  usage?: UsageStats;
 }
 
 async function spawnJson(
@@ -141,7 +137,6 @@ async function spawnJson(
 
   try {
     let finalResult: string | null = null;
-    let usage: UsageStats | undefined;
     const stderrPromise = new Response(proc.stderr).text();
     const reader = proc.stdout.getReader();
     const decoder = new TextDecoder();
@@ -170,10 +165,6 @@ async function spawnJson(
               onProgress?.({ type: 'text_delta', text: item.text });
             }
           }
-
-          if (event.type === 'turn.completed') {
-            usage = parseUsage(event.usage);
-          }
         } catch {
           // Ignore non-JSON lines such as "Reading prompt from stdin..."
         }
@@ -187,10 +178,7 @@ async function spawnJson(
 
     if (buffer.trim()) {
       try {
-        const event = JSON.parse(buffer) as Record<string, unknown>;
-        if (event.type === 'turn.completed') {
-          usage = parseUsage(event.usage);
-        }
+        JSON.parse(buffer);
       } catch {
         // ignore trailing non-JSON output
       }
@@ -205,22 +193,8 @@ async function spawnJson(
       exitCode: 0,
       stderr: '',
       content: finalResult,
-      usage,
     };
   } finally {
     signal?.removeEventListener('abort', onAbort);
   }
-}
-
-function parseUsage(raw: unknown): UsageStats | undefined {
-  if (!raw || typeof raw !== 'object') return undefined;
-  const usage = raw as Record<string, unknown>;
-
-  return {
-    inputTokens: asNumber(usage.input_tokens),
-    outputTokens: asNumber(usage.output_tokens),
-    cacheReadTokens: asNumber(usage.cached_input_tokens),
-    cacheCreateTokens: 0,
-    costUsd: null,
-  };
 }

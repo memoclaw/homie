@@ -16,18 +16,17 @@ bun run format           # Biome format
 
 ## Architecture
 
-Homie is an async Telegram agent that wraps the local `claude` CLI. Users send messages via Telegram, Homie routes them through a gateway to Claude Code, and returns results. Every message becomes a task — there is no casual chat mode.
+Homie is an interrupt-first Telegram agent that wraps local coding CLIs like Codex and Claude Code. Users send messages via Telegram, Homie routes them through a gateway to the local provider, and returns results. The latest message always wins for a chat.
 
 ### Data flow
 
 ```
 Telegram message → TelegramAdapter → Gateway.handleEvent()
-  ├─ Command (/list, /status, etc.) → CommandHandler → reply
-  └─ Chat message → TaskRunner.submit() (queued, background)
-       → SessionManager (history)
-       → Agent.run() → buildMessages() → ClaudeCodeProvider.generate()
-       → spawns `claude` CLI with stream-json output
-       → parse response, save usage
+  ├─ Command (/status, /abort, /clear, /help) → CommandHandler → reply
+  └─ Chat message → RequestRunner.submit() (interrupts active request)
+       → SessionStore (active session + history)
+       → Agent.run() → buildMessages() → provider.generate()
+       → spawns provider CLI and parses streamed output
        → reply to user
 ```
 
@@ -37,21 +36,21 @@ Telegram message → TelegramAdapter → Gateway.handleEvent()
 core (types, interfaces, errors) ← everything depends on this
 config (YAML loader) ← src/
 observability (logger) ← most packages
-persistence (SQLite stores) ← sessions, gateway, src/
-sessions (session manager) ← gateway, src/
+persistence (SQLite stores) ← gateway, src/
 providers (claude CLI wrapper) ← agent, src/
 agent (context + provider orchestration) ← gateway, src/
-gateway (routing, commands, task-runner) ← src/, telegram
+gateway (routing, commands, request-runner) ← src/, telegram
 channels/telegram (grammy adapter) ← src/
 ```
 
 ### Key patterns
 
-- **No classes.** All modules use factory functions returning interfaces (e.g., `createSessionManager(store): SessionManager`).
+- **No classes.** All modules use factory functions returning interfaces.
 - **No build step.** Bun resolves `.ts` workspace imports directly via `tsconfig.json` path aliases (`@homie/core` → `./packages/core/src`).
 - **SQLite via `bun:sqlite`** with WAL mode. Inline migrations run on `openDatabase()`. Stores are synchronous under the hood but expose async interfaces.
-- **Task queue.** One task runs at a time per chat. New messages queue up (max 10). Sessions are hidden — one per chat, used internally for Claude CLI `--session-id` continuity.
-- **Provider resilience:** Session resume via `--resume`, fallback to full history replay, 1 crash retry with 3s backoff.
+- **Interrupt-first requests.** One request runs at a time per chat. A new message aborts the old request and starts immediately.
+- **Sessions.** Chats can have multiple stored sessions, but only one active session at a time. `/clear` creates a new active session without deleting old history.
+- **Telegram ownership.** The first Telegram user to message the bot becomes the only allowed user until restart.
 - **Preflight checks:** Server startup validates Telegram bot token (`getMe` API) and Claude Code auth (minimal prompt) in parallel before booting.
 
 ### Conventions

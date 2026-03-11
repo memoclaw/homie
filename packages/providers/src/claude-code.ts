@@ -3,12 +3,10 @@ import type {
   ProviderAdapter,
   ProviderRequest,
   ProviderResponse,
-  UsageStats,
 } from '@homie/core';
 import { AbortError, ProviderError } from '@homie/core';
 import { createLogger } from '@homie/observability';
 import { extractLastUserMessage, extractSystemPrompt, flattenMessages } from './messages';
-import { asNumber } from './parse';
 
 const log = createLogger('provider:claude-code');
 
@@ -76,7 +74,17 @@ export function createClaudeCodeProvider(config: ClaudeCodeConfig): ProviderAdap
         exitCode: result.exitCode,
         stderr: result.stderr.slice(0, 500),
       });
-      await new Promise((r) => setTimeout(r, 3000));
+      await new Promise((r) => {
+        const timer = setTimeout(r, 3000);
+        input.signal?.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timer);
+            r(undefined);
+          },
+          { once: true },
+        );
+      });
 
       if (input.signal?.aborted) {
         throw new AbortError();
@@ -100,7 +108,6 @@ export function createClaudeCodeProvider(config: ClaudeCodeConfig): ProviderAdap
 
     return {
       content: result.content,
-      usage: result.usage,
       resumed: tryResume ? resumed : undefined,
     };
   }
@@ -152,7 +159,6 @@ interface SpawnResult {
   exitCode: number;
   stderr: string;
   content: string | null;
-  usage?: UsageStats;
 }
 
 async function spawnStreaming(
@@ -174,7 +180,6 @@ async function spawnStreaming(
   try {
     let finalResult: string | null = null;
     let accumulatedText = '';
-    let usage: UsageStats | undefined;
     const toolsSeen = new Set<string>();
 
     function handleResultEvent(event: Record<string, unknown>): void {
@@ -182,7 +187,6 @@ async function spawnStreaming(
         if (typeof event.result === 'string') {
           finalResult = event.result;
         }
-        usage = parseResultUsage(event);
       }
     }
 
@@ -239,10 +243,9 @@ async function spawnStreaming(
 
     log.debug('Claude Code responded', {
       outputLength: content?.length ?? 0,
-      costUsd: usage?.costUsd,
     });
 
-    return { exitCode: 0, stderr: '', content, usage };
+    return { exitCode: 0, stderr: '', content };
   } finally {
     signal?.removeEventListener('abort', onAbort);
   }
@@ -292,19 +295,4 @@ function processStreamEvent(
       onText(delta.text);
     }
   }
-}
-
-// --- Usage parsing ---
-
-function parseResultUsage(event: Record<string, unknown>): UsageStats | undefined {
-  const u = event.usage as Record<string, unknown> | undefined;
-  if (!u) return undefined;
-
-  return {
-    inputTokens: asNumber(u.input_tokens),
-    outputTokens: asNumber(u.output_tokens),
-    cacheReadTokens: asNumber(u.cache_read_input_tokens),
-    cacheCreateTokens: asNumber(u.cache_creation_input_tokens),
-    costUsd: typeof event.cost_usd === 'number' ? event.cost_usd : null,
-  };
 }

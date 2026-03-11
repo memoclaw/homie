@@ -1,14 +1,14 @@
 # @homie/gateway
 
-Routes inbound events from any channel to commands or the task runner. The central dispatch layer between channels and local agent CLIs.
+Routes inbound events from any channel to commands or the request runner. The central dispatch layer between channels and local agent CLIs.
 
 ## Components
 
 | Factory                | Purpose                                                      |
 | ---------------------- | ------------------------------------------------------------ |
-| `createGateway`        | Main event router — resolves sessions, dispatches commands or tasks |
-| `createTaskRunner`     | Queues tasks, executes one at a time per chat, with progress heartbeats |
-| `createCommandHandler` | Handles `/list`, `/status`, `/abort`, `/help`                |
+| `createGateway`        | Main event router — resolves active sessions, dispatches commands or requests |
+| `createRequestRunner`  | Interrupts the active request and starts the latest message per chat |
+| `createCommandHandler` | Handles `/status`, `/abort`, `/clear`, `/help`               |
 
 ## Flow
 
@@ -16,7 +16,7 @@ Routes inbound events from any channel to commands or the task runner. The centr
 InboundEvent (from any channel)
   → Gateway
     ├─ Command? → CommandHandler
-    └─ Chat?    → TaskRunner.submit() (queued, runs in background)
+    └─ Chat?    → RequestRunner.submit() (interrupts active request, starts latest input)
 ```
 
 ## Usage
@@ -24,6 +24,6 @@ InboundEvent (from any channel)
 ```ts
 import { createGateway } from '@homie/gateway';
 
-const gateway = createGateway({ sessionManager, agent, taskStore, usageStore });
+const gateway = createGateway({ sessionStore, agent });
 await gateway.handleEvent(event, reply, progress);
 ```

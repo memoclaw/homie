@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createCodexProvider } from './codex';
-import { createCodexUsageProvider } from './codex-usage';
 import { createProviderRuntime } from './index';
 
 interface FakeSpawnResult {
@@ -25,7 +21,7 @@ afterEach(() => {
 });
 
 describe('createProviderRuntime', () => {
-  test('creates Claude runtime with account usage', () => {
+  test('creates Claude runtime', () => {
     const runtime = createProviderRuntime({
       kind: 'claude-code',
       model: 'opus',
@@ -34,10 +30,9 @@ describe('createProviderRuntime', () => {
 
     expect(runtime.kind).toBe('claude-code');
     expect(runtime.name).toBe('Claude Code');
-    expect(runtime.accountUsage).toBeDefined();
   });
 
-  test('creates Codex runtime with account usage', () => {
+  test('creates Codex runtime', () => {
     const runtime = createProviderRuntime({
       kind: 'codex',
       model: 'o3',
@@ -46,12 +41,11 @@ describe('createProviderRuntime', () => {
 
     expect(runtime.kind).toBe('codex');
     expect(runtime.name).toBe('Codex CLI');
-    expect(runtime.accountUsage).toBeDefined();
   });
 });
 
 describe('createCodexProvider', () => {
-  test('parses final message and usage from JSONL output', async () => {
+  test('parses final message from JSONL output', async () => {
     Bun.spawn = stubSpawn([
       {
         stdoutLines: [
@@ -59,7 +53,7 @@ describe('createCodexProvider', () => {
           '{"type":"thread.started","thread_id":"thread-1"}',
           '{"type":"turn.started"}',
           '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"ok"}}',
-          '{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":3,"output_tokens":2}}',
+          '{"type":"turn.completed"}',
         ],
         exitCode: 0,
       },
@@ -72,13 +66,6 @@ describe('createCodexProvider', () => {
     });
 
     expect(result.content).toBe('ok');
-    expect(result.usage).toEqual({
-      inputTokens: 10,
-      outputTokens: 2,
-      cacheReadTokens: 3,
-      cacheCreateTokens: 0,
-      costUsd: null,
-    });
   });
 
   test('retries with full history when resume fails', async () => {
@@ -93,7 +80,7 @@ describe('createCodexProvider', () => {
         {
           stdoutLines: [
             '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"done"}}',
-            '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":4,"output_tokens":5}}',
+            '{"type":"turn.completed"}',
           ],
           exitCode: 0,
         },
@@ -140,68 +127,6 @@ describe('createCodexProvider', () => {
     expect(calls[1]?.at(-1)).toContain('[System]\nBe concise.');
     expect(calls[1]?.at(-1)).toContain('[Assistant]\nPrevious answer');
     expect(calls[1]?.at(-1)).toContain('[User]\nLatest question');
-  });
-});
-
-describe('createCodexUsageProvider', () => {
-  test('reads current 5h and weekly limits from the latest Codex session snapshot', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'homie-codex-usage-'));
-    process.env.HOME = home;
-
-    try {
-      const olderDir = join(home, '.codex', 'sessions', '2026', '03', '10');
-      const latestDir = join(home, '.codex', 'sessions', '2026', '03', '11');
-      mkdirSync(olderDir, { recursive: true });
-      mkdirSync(latestDir, { recursive: true });
-
-      writeFileSync(
-        join(olderDir, 'older.jsonl'),
-        `${JSON.stringify({
-          payload: {
-            type: 'token_count',
-            rate_limits: {
-              primary: { used_percent: 75, resets_at: 1773160000 },
-              secondary: { used_percent: 10, resets_at: 1773740000 },
-            },
-          },
-        })}\n`,
-      );
-
-      const latestPath = join(latestDir, 'latest.jsonl');
-      writeFileSync(
-        latestPath,
-        [
-          JSON.stringify({ payload: { type: 'agent_message', message: 'ignore me' } }),
-          JSON.stringify({
-            payload: {
-              type: 'token_count',
-              rate_limits: {
-                primary: { used_percent: 8, resets_at: 1773246901 },
-                secondary: { used_percent: 2, resets_at: 1773833761 },
-              },
-            },
-          }),
-        ].join('\n'),
-      );
-
-      const provider = createCodexUsageProvider();
-      const usage = await provider.getAccountUsage();
-
-      expect(usage).toEqual([
-        {
-          label: 'Current 5h limit',
-          percentUsed: 8,
-          resetsAt: '2026-03-11T16:35:01.000Z',
-        },
-        {
-          label: 'Current week',
-          percentUsed: 2,
-          resetsAt: '2026-03-18T11:36:01.000Z',
-        },
-      ]);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
   });
 });
 

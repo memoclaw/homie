@@ -1,4 +1,4 @@
-import type { Message, Session, Task, UsageStats } from './types';
+import type { Message, Session } from './types';
 
 // --- Channel ---
 
@@ -60,7 +60,6 @@ export interface ProviderRequest {
 
 export interface ProviderResponse {
   content: string | null;
-  usage?: UsageStats;
   /** True if the provider successfully resumed a prior session */
   resumed?: boolean;
 }
@@ -69,23 +68,11 @@ export interface ProviderAdapter {
   generate(input: ProviderRequest): Promise<ProviderResponse>;
 }
 
-// --- Account Usage ---
-
-export interface AccountUsageWindow {
-  label: string;
-  percentUsed: number;
-  resetsAt: string;
-}
-
-export interface AccountUsageProvider {
-  getAccountUsage(): Promise<AccountUsageWindow[] | null>;
-}
-
 // --- Stores ---
 
 export interface SessionStore {
-  getOrCreateByChat(channel: string, chatId: string, userId?: string | null): Promise<Session>;
-  getById(sessionId: string): Promise<Session | null>;
+  getOrCreateActiveByChat(channel: string, chatId: string): Promise<Session>;
+  startFreshSession(channel: string, chatId: string): Promise<Session>;
   addMessage(
     sessionId: string,
     direction: Message['direction'],
@@ -93,31 +80,4 @@ export interface SessionStore {
     rawSourceId?: string | null,
   ): Promise<Message>;
   listRecentMessages(sessionId: string, limit: number): Promise<Message[]>;
-  setSessionStatus(sessionId: string, status: import('./types').SessionStatus): Promise<void>;
-  resetStuckSessions(): Promise<number>;
-  countSessions(): Promise<number>;
-}
-
-// --- Task Store ---
-
-export interface CreateTaskParams {
-  channel: string;
-  chatId: string;
-  userId: string | null;
-  sessionId: string;
-  messageId: string | null;
-}
-
-export interface TaskWithText extends Task {
-  text: string | null;
-}
-
-export interface TaskStore {
-  createTask(params: CreateTaskParams): Promise<Task>;
-  getTask(taskId: string): Promise<Task | null>;
-  getRunningTask(channel: string, chatId: string): Promise<TaskWithText | null>;
-  getQueuedTasks(channel: string, chatId: string): Promise<Task[]>;
-  listTasks(channel: string, chatId: string, limit?: number): Promise<TaskWithText[]>;
-  updateTaskStatus(taskId: string, status: Task['status']): Promise<void>;
-  resetStuckTasks(): Promise<number>;
 }

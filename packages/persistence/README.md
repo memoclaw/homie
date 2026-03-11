@@ -1,6 +1,6 @@
 # @homie/persistence
 
-SQLite-backed stores for sessions, tasks, messages, key-value data, and usage tracking.
+SQLite-backed stores for sessions, active sessions, and messages.
 
 Uses `bun:sqlite` with WAL mode and inline migrations.
 
@@ -8,18 +8,13 @@ Uses `bun:sqlite` with WAL mode and inline migrations.
 
 | Factory              | Purpose                                               |
 | -------------------- | ----------------------------------------------------- |
-| `createSessionStore` | Sessions and messages (implements `SessionStore`)     |
-| `createTaskStore`    | Task queue and history (implements `TaskStore`)       |
-| `createKvStore`      | Simple string key-value store                         |
-| `createUsageStore`   | Token usage recording and summaries                   |
+| `createSessionStore` | Sessions, active session pointers, and messages       |
 
 ## Usage
 
 ```ts
-import { openDatabase, createSessionStore, createTaskStore, createKvStore } from '@homie/persistence';
+import { openDatabase, createSessionStore } from '@homie/persistence';
 
 const db = openDatabase('./data/homie.db'); // runs migrations automatically
 const sessions = createSessionStore(db);
-const tasks = createTaskStore(db);
-const kv = createKvStore(db);
 ```

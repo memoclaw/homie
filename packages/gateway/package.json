@@ -6,7 +6,6 @@
   "dependencies": {
     "@homie/core": "workspace:*",
     "@homie/persistence": "workspace:*",
-    "@homie/sessions": "workspace:*",
     "@homie/agent": "workspace:*",
     "@homie/observability": "workspace:*"
   }
