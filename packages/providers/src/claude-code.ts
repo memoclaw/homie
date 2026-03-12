@@ -9,6 +9,7 @@ import { createLogger } from '@homie/observability';
 import { extractLastUserMessage, extractSystemPrompt, flattenMessages } from './messages';
 
 const log = createLogger('provider:claude-code');
+const SESSION_CONFLICT_MARKER = 'already in use';
 
 // --- Config ---
 
@@ -70,9 +71,11 @@ export function createClaudeCodeProvider(config: ClaudeCodeConfig): ProviderAdap
 
     // Retry once on crash (non-resume failures)
     if (result.content === null && !input.signal?.aborted) {
+      const sessionConflict = result.stderr.includes(SESSION_CONFLICT_MARKER);
       log.warn('Claude Code failed, retrying in 3s', {
         exitCode: result.exitCode,
         stderr: result.stderr.slice(0, 500),
+        sessionConflict,
       });
       await new Promise((r) => {
         const timer = setTimeout(r, 3000);
@@ -90,7 +93,19 @@ export function createClaudeCodeProvider(config: ClaudeCodeConfig): ProviderAdap
         throw new AbortError();
       }
 
-      result = await spawnStreaming(cmd, args, input.onProgress, input.signal);
+      // If the session is still locked by a zombie process, retry without session ID
+      const retryArgs = sessionConflict
+        ? buildArgs({
+            prompt: flattenMessages(input.messages),
+            systemPrompt: null,
+            model: config.model,
+            extra: extraArgs,
+            sessionId: undefined,
+            hasHistory: false,
+          })
+        : args;
+
+      result = await spawnStreaming(cmd, retryArgs, input.onProgress, input.signal);
     }
 
     if (result.content === null) {
@@ -174,7 +189,7 @@ async function spawnStreaming(
     stderr: 'pipe',
   });
 
-  const onAbort = () => proc.kill();
+  const onAbort = () => proc.kill(9);
   signal?.addEventListener('abort', onAbort, { once: true });
 
   try {

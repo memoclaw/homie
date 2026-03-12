@@ -13,6 +13,7 @@ export interface ChatMessageEvent {
   chatId: string;
   text: string;
   rawSourceId: string | null;
+  agentModel?: string | null;
   attachments?: Attachment[];
 }
 

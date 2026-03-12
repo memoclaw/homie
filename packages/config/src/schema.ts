@@ -9,7 +9,6 @@ export const AppConfigSchema = z.object({
     botToken: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
   }),
   provider: z.object({
-    kind: z.enum(['claude-code', 'codex']).default('claude-code'),
     model: z.string().default(''),
     extraArgs: z.array(z.string()).default([]),
   }),

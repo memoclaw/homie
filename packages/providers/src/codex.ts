@@ -132,7 +132,7 @@ async function spawnJson(
     stderr: 'pipe',
   });
 
-  const onAbort = () => proc.kill();
+  const onAbort = () => proc.kill(9);
   signal?.addEventListener('abort', onAbort, { once: true });
 
   try {

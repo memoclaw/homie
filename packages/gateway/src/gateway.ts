@@ -3,13 +3,14 @@ import type { InboundEvent, ProgressHandler, ReplyFn, SessionStore } from '@homi
 import { getErrorMessage } from '@homie/core';
 import { createLogger } from '@homie/observability';
 import { createCommandHandler } from './commands';
-import { createRequestRunner } from './request-runner';
+import { type AgentSelectionOverride, createRequestRunner } from './request-runner';
 
 const log = createLogger('gateway');
 
 export interface GatewayDeps {
   sessionStore: SessionStore;
   agent: Agent;
+  resolveAgent?: (selection: AgentSelectionOverride) => Agent;
 }
 
 export interface Gateway {
@@ -20,6 +21,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
   const runner = createRequestRunner({
     sessionStore: deps.sessionStore,
     agent: deps.agent,
+    resolveAgent: deps.resolveAgent,
   });
 
   const commands = createCommandHandler({
@@ -44,12 +46,15 @@ export function createGateway(deps: GatewayDeps): Gateway {
         // Submit as a run (chat messages + unrecognized commands)
         const text =
           event.type === 'command' ? `/${event.command} ${event.args}`.trim() : event.text;
+        const agentSelection = event.type === 'chat' ? parseAgentSelection(event.agentModel) : null;
 
         await runner.submit({
           channel: event.channel,
           chatId: event.chatId,
           text,
           rawSourceId: event.rawSourceId,
+          agentType: agentSelection?.agentType,
+          agentModel: agentSelection?.agentModel,
           reply,
           progress,
           attachments: event.type === 'chat' ? event.attachments : undefined,
@@ -64,5 +69,29 @@ export function createGateway(deps: GatewayDeps): Gateway {
         }
       }
     },
+  };
+}
+
+const AGENT_TYPE_ALIASES: Record<string, string> = {
+  claude: 'claude-code',
+  'claude-code': 'claude-code',
+  codex: 'codex',
+};
+
+function parseAgentSelection(agentModel?: string | null): AgentSelectionOverride | null {
+  const value = agentModel?.trim();
+  if (!value) {
+    return null;
+  }
+
+  const [head, ...rest] = value.split(/\s+/);
+  const agentType = AGENT_TYPE_ALIASES[head?.toLowerCase() ?? ''];
+  if (!agentType) {
+    return { agentModel: value };
+  }
+
+  return {
+    agentType,
+    agentModel: rest.join(' ').trim() || null,
   };
 }

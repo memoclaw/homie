@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createCodexProvider } from './codex';
-import { createProviderRuntime } from './index';
+import { detectProvider } from './index';
 
 interface FakeSpawnResult {
   stdoutLines?: string[];
@@ -20,27 +20,49 @@ afterEach(() => {
   }
 });
 
-describe('createProviderRuntime', () => {
-  test('creates Claude runtime', () => {
-    const runtime = createProviderRuntime({
-      kind: 'claude-code',
-      model: 'opus',
-      extraArgs: ['--verbose'],
-    });
+describe('detectProvider', () => {
+  test('returns claude-code when claude CLI is available', async () => {
+    Bun.spawn = stubSpawn([
+      { stdoutLines: ['claude 1.0.0'], exitCode: 0 },
+      { stdoutLines: ['pong'], exitCode: 0 },
+    ]);
 
-    expect(runtime.kind).toBe('claude-code');
-    expect(runtime.name).toBe('Claude Code');
+    const runtime = await detectProvider({ model: 'opus' });
+    expect(runtime).not.toBeNull();
+    expect(runtime?.kind).toBe('claude-code');
+    expect(runtime?.name).toBe('Claude Code');
   });
 
-  test('creates Codex runtime', () => {
-    const runtime = createProviderRuntime({
-      kind: 'codex',
-      model: 'o3',
-      extraArgs: ['--skip-git-repo-check'],
-    });
+  test('falls back to codex when claude CLI is unavailable', async () => {
+    const fakeProc = (stdout: string, exitCode: number) =>
+      ({
+        stdout: streamFromText(stdout),
+        stderr: streamFromText(exitCode ? 'command not found' : ''),
+        exited: Promise.resolve(exitCode),
+        kill() {},
+      }) as ReturnType<typeof Bun.spawn>;
 
-    expect(runtime.kind).toBe('codex');
-    expect(runtime.name).toBe('Codex CLI');
+    Bun.spawn = ((cmd: string[]) => {
+      if (cmd[0] === 'claude') return fakeProc('', 1);
+      return fakeProc('codex 1.0.0\n', 0);
+    }) as typeof Bun.spawn;
+
+    const runtime = await detectProvider({ model: 'o3' });
+    expect(runtime).not.toBeNull();
+    expect(runtime?.kind).toBe('codex');
+    expect(runtime?.name).toBe('Codex CLI');
+  });
+
+  test('returns null when no provider is available', async () => {
+    Bun.spawn = stubSpawn([
+      { stderrText: 'not found', exitCode: 1 },
+      { stderrText: 'not found', exitCode: 1 },
+      { stderrText: 'not found', exitCode: 1 },
+      { stderrText: 'not found', exitCode: 1 },
+    ]);
+
+    const runtime = await detectProvider({ model: '' });
+    expect(runtime).toBeNull();
   });
 });
 

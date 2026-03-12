@@ -23,17 +23,21 @@ describe('Gateway', () => {
   let db: Database;
   let gateway: ReturnType<typeof createGateway>;
   let provider: ProviderAdapter;
+  let overrideProvider: ProviderAdapter;
   let replies: string[];
 
   beforeEach(() => {
     db = createTestDb();
     const sessionStore = createSessionStore(db);
     provider = createMockProvider();
+    overrideProvider = createMockProvider('override response');
     const agent = createAgent(provider, { model: 'test' });
+    const overrideAgent = createAgent(overrideProvider, { model: 'opus 4.6' });
 
     gateway = createGateway({
       sessionStore,
       agent,
+      resolveAgent: () => overrideAgent,
     });
 
     replies = [];
@@ -61,6 +65,24 @@ describe('Gateway', () => {
 
     expect(provider.generate).toHaveBeenCalled();
     expect(replies).toContain('test response');
+  });
+
+  test('uses override agent when chat event includes agent model selection', async () => {
+    const event: ChatMessageEvent = {
+      type: 'chat',
+      channel: 'telegram',
+      chatId: 'chat1',
+      text: 'hello',
+      rawSourceId: '1',
+      agentModel: 'claude opus 4.6',
+    };
+
+    await gateway.handleEvent(event, replyFn);
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(overrideProvider.generate).toHaveBeenCalled();
+    expect(provider.generate).not.toHaveBeenCalled();
+    expect(replies).toContain('override response');
   });
 
   test('handles /help command', async () => {

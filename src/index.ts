@@ -6,7 +6,7 @@ import { getErrorMessage } from '@homie/core';
 import { createGateway } from '@homie/gateway';
 import { createLogger, setLogLevel } from '@homie/observability';
 import { createSessionStore, openDatabase } from '@homie/persistence';
-import { createProviderRuntime } from '@homie/providers';
+import { createProviderRuntime, detectProvider, type ProviderKind } from '@homie/providers';
 import { createTelegramAdapter } from '@homie/telegram';
 
 const log = createLogger('server');
@@ -35,50 +35,37 @@ async function main() {
   setLogLevel(config.app.logLevel as 'debug' | 'info' | 'warn' | 'error');
 
   log.info('Starting Homie', {
-    provider: config.provider.kind,
     model: config.provider.model,
     logLevel: config.app.logLevel,
   });
 
-  // --- Preflight checks (run in parallel) ---
+  // --- Preflight checks ---
   log.info('Running preflight checks...');
 
-  const providerRuntime = createProviderRuntime(config.provider);
-
-  const [telegramCheck, providerCheck] = await Promise.all([
+  const [telegramCheck, providerRuntime] = await Promise.all([
     verifyTelegramToken(config.telegram.botToken),
-    providerRuntime.check(),
+    detectProvider(config.provider),
   ]);
-
-  let preflightFailed = false;
 
   if (!telegramCheck.ok) {
     console.error(
       `\n  ✗ Telegram: ${telegramCheck.error}\n    Check TELEGRAM_BOT_TOKEN in your .env file.\n`,
     );
-    preflightFailed = true;
   } else {
     log.info('Telegram bot verified', { username: telegramCheck.username });
   }
 
-  if (!providerCheck.available) {
+  if (!providerRuntime) {
     console.error(
-      `\n  ✗ ${providerRuntime.name}: CLI not found.\n    Install and configure ${providerRuntime.name} before starting Homie.\n`,
+      '\n  ✗ No provider CLI found.\n    Install and authenticate Claude Code or Codex CLI before starting Homie.\n',
     );
-    preflightFailed = true;
-  } else if (!providerCheck.authed) {
-    console.error(
-      `\n  ✗ ${providerRuntime.name}: not authenticated.\n    ${providerCheck.error ? `Detail: ${providerCheck.error}` : ''}\n`,
-    );
-    preflightFailed = true;
   } else {
-    log.info('Provider verified', {
+    log.info('Provider detected', {
       provider: providerRuntime.name,
-      version: providerCheck.version,
     });
   }
 
-  if (preflightFailed) {
+  if (!telegramCheck.ok || !providerRuntime) {
     process.exit(1);
   }
 
@@ -99,10 +86,31 @@ async function main() {
   const agent = createAgent(providerRuntime.adapter, {
     model: config.provider.model,
   });
+  const agentCache = new Map<string, typeof agent>([
+    [cacheKey(providerRuntime.kind, config.provider.model), agent],
+  ]);
 
   const gateway = createGateway({
     sessionStore,
     agent,
+    resolveAgent(selection) {
+      const kind = normalizeProviderKind(selection.agentType) ?? providerRuntime.kind;
+      const model = selection.agentModel?.trim() || config.provider.model;
+      const key = cacheKey(kind, model);
+      const cached = agentCache.get(key);
+      if (cached) {
+        return cached;
+      }
+
+      const runtime = createProviderRuntime({
+        kind,
+        model,
+        extraArgs: config.provider.extraArgs,
+      });
+      const nextAgent = createAgent(runtime.adapter, { model });
+      agentCache.set(key, nextAgent);
+      return nextAgent;
+    },
   });
 
   // Telegram
@@ -132,3 +140,14 @@ main().catch((err) => {
   console.error('Fatal error:', err);
   process.exit(1);
 });
+
+function normalizeProviderKind(kind?: string | null): ProviderKind | null {
+  if (kind === 'claude-code' || kind === 'codex') {
+    return kind;
+  }
+  return null;
+}
+
+function cacheKey(kind: ProviderKind, model: string): string {
+  return `${kind}:${model}`;
+}

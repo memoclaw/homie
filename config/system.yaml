@@ -6,8 +6,7 @@ app:
 telegram:
   botToken: ${TELEGRAM_BOT_TOKEN}
 
-# Claude Code provider
+# Provider (auto-detects claude-code or codex)
 provider:
-  kind: codex
-  model: "gpt-5.4"
+  model: ""
   extraArgs: []

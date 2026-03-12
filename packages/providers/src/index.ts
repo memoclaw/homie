@@ -11,7 +11,6 @@ export { type CodexConfig, checkCodexCli, createCodexProvider } from './codex';
 export type ProviderKind = 'claude-code' | 'codex';
 
 export interface ProviderRuntimeConfig {
-  kind: ProviderKind;
   model: string;
   extraArgs?: string[];
 }
@@ -20,7 +19,6 @@ export interface ProviderRuntime {
   kind: ProviderKind;
   name: string;
   adapter: ProviderAdapter;
-  check(): Promise<CliProviderStatus>;
 }
 
 interface ProviderRuntimeFactory {
@@ -37,15 +35,18 @@ export async function checkClaudeCode(): Promise<CliProviderStatus> {
   });
 }
 
-export function createProviderRuntime(config: ProviderRuntimeConfig): ProviderRuntime {
+export function createProviderRuntime(
+  config: ProviderRuntimeConfig & { kind: ProviderKind },
+): ProviderRuntime {
   const factory = PROVIDER_FACTORIES[config.kind];
   return {
     kind: config.kind,
     name: factory.name,
     adapter: factory.createAdapter(config),
-    check: factory.check,
   };
 }
+
+const DETECTION_ORDER: ProviderKind[] = ['claude-code', 'codex'];
 
 const PROVIDER_FACTORIES: Record<ProviderKind, ProviderRuntimeFactory> = {
   'claude-code': {
@@ -63,3 +64,24 @@ const PROVIDER_FACTORIES: Record<ProviderKind, ProviderRuntimeFactory> = {
     check: checkCodexCli,
   },
 };
+
+/**
+ * Detect the first available and authenticated provider CLI.
+ * Checks in order: claude-code, codex.
+ */
+export async function detectProvider(
+  config: ProviderRuntimeConfig,
+): Promise<ProviderRuntime | null> {
+  for (const kind of DETECTION_ORDER) {
+    const factory = PROVIDER_FACTORIES[kind];
+    const status = await factory.check();
+    if (status.available && status.authed) {
+      return {
+        kind,
+        name: factory.name,
+        adapter: factory.createAdapter(config),
+      };
+    }
+  }
+  return null;
+}

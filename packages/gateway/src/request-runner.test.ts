@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { createAgent } from '@homie/agent';
+import { type Agent, createAgent } from '@homie/agent';
 import { AbortError, type ProviderAdapter } from '@homie/core';
 import { schema } from '@homie/persistence/src/migrations';
 import { createSessionStore } from '@homie/persistence/src/session-store';
@@ -19,6 +19,7 @@ describe('RequestRunner', () => {
   let sessionStore: ReturnType<typeof createSessionStore>;
   let sessionId: string;
   let provider: ProviderAdapter;
+  let overrideAgent: Agent;
 
   beforeEach(async () => {
     db = createTestDb();
@@ -32,10 +33,16 @@ describe('RequestRunner', () => {
       })),
     };
     const agent = createAgent(provider, { model: 'test' });
+    overrideAgent = {
+      run: mock(async () => ({
+        text: 'override done',
+      })),
+    };
 
     runner = createRequestRunner({
       sessionStore,
       agent,
+      resolveAgent: () => overrideAgent,
     });
   });
 
@@ -95,6 +102,20 @@ describe('RequestRunner', () => {
 
       expect(provider.generate).toHaveBeenCalled();
       expect(replies).toContain('done');
+    });
+
+    test('uses resolved agent override when agent selection is provided', async () => {
+      const { params, replies } = submitParams('hello');
+      await runner.submit({
+        ...params,
+        agentType: 'claude-code',
+        agentModel: 'opus 4.6',
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(overrideAgent.run).toHaveBeenCalled();
+      expect(provider.generate).not.toHaveBeenCalled();
+      expect(replies).toContain('override done');
     });
 
     test('stores conversation messages in DB', async () => {

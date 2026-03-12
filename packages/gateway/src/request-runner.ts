@@ -28,9 +28,16 @@ interface SubmitRequest {
   chatId: string;
   text: string;
   rawSourceId: string | null;
+  agentType?: string | null;
+  agentModel?: string | null;
   reply: ReplyFn;
   progress?: ProgressHandler;
   attachments?: Attachment[];
+}
+
+export interface AgentSelectionOverride {
+  agentType?: string | null;
+  agentModel?: string | null;
 }
 
 interface ExecutionContext {
@@ -43,6 +50,7 @@ interface ExecutionContext {
 export interface RequestRunnerDeps {
   sessionStore: SessionStore;
   agent: Agent;
+  resolveAgent?: (selection: AgentSelectionOverride) => Agent;
 }
 
 export interface RequestRunner {
@@ -56,7 +64,7 @@ export interface RequestRunner {
 }
 
 export function createRequestRunner(deps: RequestRunnerDeps): RequestRunner {
-  const { sessionStore, agent } = deps;
+  const { sessionStore, agent, resolveAgent } = deps;
   const activeRequests = new Map<string, ActiveRequest>();
   const staleResume = new Set<string>();
 
@@ -167,11 +175,13 @@ export function createRequestRunner(deps: RequestRunnerDeps): RequestRunner {
 
   async function execute(
     context: ExecutionContext,
-    params: Omit<SubmitRequest, 'channel' | 'chatId' | 'rawSourceId'>,
+    params: Omit<SubmitRequest, 'channel' | 'chatId'>,
   ): Promise<void> {
     const { active, forceFullHistory, key, sessionId } = context;
-    const { text, reply, progress, attachments } = params;
+    const { text, rawSourceId, agentType, agentModel, reply, progress, attachments } = params;
     const signal = active.abort.signal;
+    const selectedAgent =
+      agentType || agentModel ? (resolveAgent?.({ agentType, agentModel }) ?? agent) : agent;
 
     const done = (async () => {
       let typingInterval: ReturnType<typeof setInterval> | undefined;
@@ -192,9 +202,11 @@ export function createRequestRunner(deps: RequestRunnerDeps): RequestRunner {
           }, 30000);
         }
 
+        if (signal.aborted) throw new AbortError();
+        await sessionStore.addMessage(sessionId, 'in', text, rawSourceId);
         const history = await sessionStore.listRecentMessages(sessionId, MAX_HISTORY_MESSAGES);
 
-        const result = await agent.run({
+        const result = await selectedAgent.run({
           sessionId,
           text: buildPromptText(text, attachments),
           history,
@@ -243,10 +255,17 @@ export function createRequestRunner(deps: RequestRunnerDeps): RequestRunner {
 
   return {
     async submit(params) {
-      const { channel, chatId, text, rawSourceId, reply, progress, attachments } = params;
+      const { channel, chatId, text, reply, progress, attachments, rawSourceId } = params;
       const context = await prepareExecution(channel, chatId, text);
-      await sessionStore.addMessage(context.sessionId, 'in', text, rawSourceId);
-      await execute(context, { text, reply, progress, attachments });
+      await execute(context, {
+        text,
+        rawSourceId,
+        agentType: params.agentType,
+        agentModel: params.agentModel,
+        reply,
+        progress,
+        attachments,
+      });
     },
 
     async abort(channel, chatId) {
