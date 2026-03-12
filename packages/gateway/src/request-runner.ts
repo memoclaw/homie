@@ -178,7 +178,8 @@ export function createRequestRunner(deps: RequestRunnerDeps): RequestRunner {
     params: Omit<SubmitRequest, 'channel' | 'chatId'>,
   ): Promise<void> {
     const { active, forceFullHistory, key, sessionId } = context;
-    const { text, rawSourceId, agentType, agentModel, reply, progress, attachments } = params;
+    const { channel, text, rawSourceId, agentType, agentModel, reply, progress, attachments } =
+      params;
     const signal = active.abort.signal;
     const selectedAgent =
       agentType || agentModel ? (resolveAgent?.({ agentType, agentModel }) ?? agent) : agent;
@@ -221,7 +222,9 @@ export function createRequestRunner(deps: RequestRunnerDeps): RequestRunner {
 
         if (result.resumed === false) {
           log.warn('Session context was refreshed (resume failed)', { sessionId });
-          await reply('(Session context was refreshed)');
+          if (channel !== 'github') {
+            await reply('(Session context was refreshed)');
+          }
         }
 
         await sessionStore.addMessage(sessionId, 'out', result.text);
@@ -258,6 +261,7 @@ export function createRequestRunner(deps: RequestRunnerDeps): RequestRunner {
       const { channel, chatId, text, reply, progress, attachments, rawSourceId } = params;
       const context = await prepareExecution(channel, chatId, text);
       await execute(context, {
+        channel,
         text,
         rawSourceId,
         agentType: params.agentType,

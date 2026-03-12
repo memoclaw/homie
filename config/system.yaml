@@ -10,3 +10,9 @@ telegram:
 provider:
   model: ""
   extraArgs: []
+
+# GitHub workflow polling (scaffolded, not started yet)
+github:
+  enabled: true
+  pollIntervalSec: 60
+  workflowsDir: ./workflows/github

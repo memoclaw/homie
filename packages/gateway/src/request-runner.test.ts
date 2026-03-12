@@ -129,6 +129,36 @@ describe('RequestRunner', () => {
       expect(messages[1]?.text).toBe('done');
     });
 
+    test('does not emit session refresh notice for github channel', async () => {
+      overrideAgent = {
+        run: mock(async () => ({
+          text: '{"handle":true,"reason":"ok","reply":"done"}',
+          resumed: false,
+        })),
+      };
+      runner = createRequestRunner({
+        sessionStore,
+        agent: createAgent(provider, { model: 'test' }),
+        resolveAgent: () => overrideAgent,
+      });
+
+      const replies: string[] = [];
+      await runner.submit({
+        channel: 'github',
+        chatId: 'repo:1',
+        text: 'evaluate',
+        rawSourceId: 'n1',
+        agentType: 'claude-code',
+        agentModel: 'opus 4.6',
+        reply: async (text) => {
+          replies.push(text);
+        },
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(replies).toEqual(['{"handle":true,"reason":"ok","reply":"done"}']);
+    });
+
     test('replies with generic failure on provider error', async () => {
       (provider.generate as ReturnType<typeof mock>).mockImplementation(async () => {
         throw new Error('boom');

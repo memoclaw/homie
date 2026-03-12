@@ -12,6 +12,13 @@ export const AppConfigSchema = z.object({
     model: z.string().default(''),
     extraArgs: z.array(z.string()).default([]),
   }),
+  github: z
+    .object({
+      enabled: z.boolean().default(false),
+      pollIntervalSec: z.number().int().positive().default(60),
+      workflowsDir: z.string().default('./workflows/github'),
+    })
+    .default({}),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;

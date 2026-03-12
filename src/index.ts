@@ -4,6 +4,7 @@ import { createAgent } from '@homie/agent';
 import { loadConfig } from '@homie/config';
 import { getErrorMessage } from '@homie/core';
 import { createGateway } from '@homie/gateway';
+import { createGitHubAdapter } from '@homie/github';
 import { createLogger, setLogLevel } from '@homie/observability';
 import { createSessionStore, openDatabase } from '@homie/persistence';
 import { createProviderRuntime, detectProvider, type ProviderKind } from '@homie/providers';
@@ -121,11 +122,21 @@ async function main() {
   });
   await telegram.start();
 
+  const github = createGitHubAdapter({
+    enabled: config.github.enabled,
+    workflowsDir: config.github.workflowsDir,
+    onEvent: gateway.handleEvent,
+    pollIntervalMs: config.github.pollIntervalSec * 1000,
+    markReadOnHandled: true,
+  });
+  await github.start();
+
   log.info('Homie is running');
 
   // Graceful shutdown
   const shutdown = async () => {
     log.info('Shutting down...');
+    await github.stop();
     await telegram.stop();
     db.close();
     log.info('Goodbye');

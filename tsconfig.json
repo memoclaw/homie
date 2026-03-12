@@ -18,6 +18,7 @@
       "@homie/observability": ["./packages/observability/src"],
       "@homie/persistence": ["./packages/persistence/src"],
       "@homie/gateway": ["./packages/gateway/src"],
+      "@homie/github": ["./packages/channels/github/src"],
       "@homie/telegram": ["./packages/channels/telegram/src"],
       "@homie/providers": ["./packages/providers/src"],
       "@homie/agent": ["./packages/agent/src"]
