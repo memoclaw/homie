@@ -4,11 +4,11 @@ import { buildGitHubWorkflowPrompt } from './prompt';
 
 describe('buildGitHubWorkflowPrompt', () => {
   test('includes trigger and recent activity', async () => {
-    const workflow = await loadGitHubWorkflow('workflows/github/pr-review-mentions/WORKFLOW.md');
+    const workflow = await loadGitHubWorkflow('workflows/github/repo-watcher/WORKFLOW.md');
     const repo = workflow.definition.repos[0] ?? 'unknown/repo';
     const actor = workflow.definition.users?.[0] ?? 'someone';
     const prompt = buildGitHubWorkflowPrompt(workflow, {
-      notificationId: 'n1',
+      eventId: 'n1',
       repo,
       actor,
       subjectType: 'PullRequest',

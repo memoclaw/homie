@@ -126,8 +126,8 @@ async function main() {
     enabled: config.github.enabled,
     workflowsDir: config.github.workflowsDir,
     onEvent: gateway.handleEvent,
-    pollIntervalMs: config.github.pollIntervalSec * 1000,
-    markReadOnHandled: true,
+    webhook: config.github.webhook,
+    token: config.github.token,
   });
   await github.start();
 

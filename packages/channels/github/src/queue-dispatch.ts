@@ -4,21 +4,20 @@ import type { Logger } from '@homie/observability';
 import type { GitHubClient } from './client';
 import {
   formatReplyWithMarker,
-  hasNotificationMarker,
-  notificationMarker,
-  type QueuedGitHubNotification,
+  hasReplyMarker,
+  type QueuedGitHubEvent,
+  replyMarker,
 } from './notification';
 import { buildGitHubWorkflowPrompt } from './prompt';
 import { parseGitHubWorkflowDecision } from './workflow-evaluator';
 
-export async function dispatchQueuedGitHubNotification(params: {
+export async function dispatchQueuedGitHubEvent(params: {
   client: GitHubClient;
-  item: QueuedGitHubNotification;
+  item: QueuedGitHubEvent;
   onEvent: EventHandler;
-  markReadOnHandled: boolean;
   log: Logger;
 }): Promise<void> {
-  const { client, item, onEvent, markReadOnHandled, log } = params;
+  const { client, item, onEvent, log } = params;
 
   await new Promise<void>((resolve) => {
     void onEvent(
@@ -27,7 +26,7 @@ export async function dispatchQueuedGitHubNotification(params: {
         channel: 'github',
         chatId: item.chatId,
         text: buildGitHubWorkflowPrompt(item.workflow, item.details),
-        rawSourceId: item.notification.id,
+        rawSourceId: item.event.id,
         agentModel: item.workflow.definition.agentModel ?? null,
       },
       async (replyText) => {
@@ -38,10 +37,10 @@ export async function dispatchQueuedGitHubNotification(params: {
 
           const decision = parseGitHubWorkflowDecision(replyText);
           if (decision.handle) {
-            const marker = notificationMarker(item.notification.id);
-            if (!hasNotificationMarker(item.details, marker)) {
+            const marker = replyMarker(item.event.id);
+            if (!hasReplyMarker(item.details, marker)) {
               log.info('Posting GitHub workflow reply', {
-                notificationId: item.notification.id,
+                eventId: item.event.id,
                 repo: item.details.repo,
                 subjectType: item.details.subjectType,
                 reason: decision.reason,
@@ -52,26 +51,22 @@ export async function dispatchQueuedGitHubNotification(params: {
               );
             } else {
               log.info('Skipping GitHub reply (marker already present)', {
-                notificationId: item.notification.id,
+                eventId: item.event.id,
                 repo: item.details.repo,
                 subjectType: item.details.subjectType,
               });
             }
           } else {
             log.info('Skipping GitHub reply (workflow decided not to handle)', {
-              notificationId: item.notification.id,
+              eventId: item.event.id,
               repo: item.details.repo,
               subjectType: item.details.subjectType,
               reason: decision.reason,
             });
           }
-
-          if (markReadOnHandled) {
-            await client.markNotificationRead(item.notification.id);
-          }
         } catch (err) {
-          log.error('GitHub notification handling failed', {
-            notificationId: item.notification.id,
+          log.error('GitHub event handling failed', {
+            eventId: item.event.id,
             error: getErrorMessage(err),
           });
         } finally {
@@ -80,7 +75,7 @@ export async function dispatchQueuedGitHubNotification(params: {
       },
     ).catch((err) => {
       log.error('GitHub event dispatch failed', {
-        notificationId: item.notification.id,
+        eventId: item.event.id,
         error: getErrorMessage(err),
       });
       resolve();

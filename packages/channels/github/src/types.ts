@@ -11,7 +11,6 @@ export interface GitHubWorkflowDefinition extends GitHubWorkflowScope {
   id: string;
   name: string;
   description?: string;
-  pollIntervalSec?: number;
   agentModel?: string | null;
   postMode?: 'comment' | 'review';
 }
@@ -23,22 +22,22 @@ export interface LoadedGitHubWorkflow {
   workflowPath: string;
 }
 
-export interface GitHubNotificationContext {
-  notificationId: string;
+export interface GitHubEventContext {
+  eventId: string;
   repo: string;
   actor: string | null;
   subjectType: GitHubSubjectType;
   updatedAt: string;
 }
 
-export interface GitHubNotificationSummary {
+export interface GitHubEventSummary {
   id: string;
   repo: string;
   subjectType: GitHubSubjectType;
   updatedAt: string;
 }
 
-export interface GitHubNotificationDetails extends GitHubNotificationContext {
+export interface GitHubEventDetails extends GitHubEventContext {
   title: string;
   url: string;
   number: number | null;
@@ -67,4 +66,10 @@ export interface GitHubActivityItem {
   state?: string | null;
   url: string | null;
   createdAt: string;
+}
+
+export interface WebhookOptions {
+  port: number;
+  path: string;
+  secret: string;
 }

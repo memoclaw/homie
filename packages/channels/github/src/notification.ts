@@ -1,12 +1,8 @@
-import type {
-  GitHubNotificationDetails,
-  GitHubNotificationSummary,
-  LoadedGitHubWorkflow,
-} from './types';
+import type { GitHubEventDetails, GitHubEventSummary, LoadedGitHubWorkflow } from './types';
 
-export interface QueuedGitHubNotification {
-  notification: GitHubNotificationSummary;
-  details: GitHubNotificationDetails;
+export interface QueuedGitHubEvent {
+  event: GitHubEventSummary;
+  details: GitHubEventDetails;
   workflow: LoadedGitHubWorkflow;
   chatId: string;
 }
@@ -15,30 +11,17 @@ export function buildChatId(
   repo: string,
   subjectType: string,
   number: number | null,
-  notificationId: string,
+  eventId: string,
 ): string {
-  const scope = number
-    ? `${subjectType.toLowerCase()}:${number}`
-    : `notification:${notificationId}`;
+  const scope = number ? `${subjectType.toLowerCase()}:${number}` : `event:${eventId}`;
   return `github:${repo}:${scope}`;
 }
 
-export function matchesStaticScope(
-  workflow: LoadedGitHubWorkflow['definition'],
-  notification: { repo: string; subjectType: string },
-): boolean {
-  if (!workflow.repos.includes(notification.repo)) {
-    return false;
-  }
-
-  return !workflow.subjectTypes || workflow.subjectTypes.includes(notification.subjectType);
+export function replyMarker(eventId: string): string {
+  return `<!-- homie:event:${eventId} -->`;
 }
 
-export function notificationMarker(notificationId: string): string {
-  return `<!-- homie:notification:${notificationId} -->`;
-}
-
-export function hasNotificationMarker(details: GitHubNotificationDetails, marker: string): boolean {
+export function hasReplyMarker(details: GitHubEventDetails, marker: string): boolean {
   return details.activity.some((item) => item.body?.includes(marker));
 }
 

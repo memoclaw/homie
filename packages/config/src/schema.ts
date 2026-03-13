@@ -15,8 +15,15 @@ export const AppConfigSchema = z.object({
   github: z
     .object({
       enabled: z.boolean().default(false),
-      pollIntervalSec: z.number().int().positive().default(60),
+      token: z.string().default(''),
       workflowsDir: z.string().default('./workflows/github'),
+      webhook: z
+        .object({
+          port: z.number().int().positive().default(3100),
+          path: z.string().default('/webhooks/github'),
+          secret: z.string().default(''),
+        })
+        .default({}),
     })
     .default({}),
 });

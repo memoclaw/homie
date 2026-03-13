@@ -1,8 +1,8 @@
-import type { GitHubNotificationDetails, LoadedGitHubWorkflow } from './types';
+import type { GitHubEventDetails, LoadedGitHubWorkflow } from './types';
 
 export function buildGitHubWorkflowPrompt(
   workflow: LoadedGitHubWorkflow,
-  details: GitHubNotificationDetails,
+  details: GitHubEventDetails,
 ): string {
   const activity =
     details.activity.length > 0
@@ -21,7 +21,7 @@ export function buildGitHubWorkflowPrompt(
   return [
     workflow.workflowMarkdown,
     '',
-    '## Notification',
+    '## Event',
     `Workflow ID: ${workflow.definition.id}`,
     `Repository: ${details.repo}`,
     `Subject type: ${details.subjectType}`,

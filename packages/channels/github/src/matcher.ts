@@ -1,35 +1,29 @@
-import type {
-  GitHubNotificationContext,
-  GitHubWorkflowDefinition,
-  GitHubWorkflowMatch,
-} from './types';
+import type { GitHubEventContext, GitHubWorkflowDefinition, GitHubWorkflowMatch } from './types';
 
 export function matchGitHubWorkflow(
   workflow: GitHubWorkflowDefinition,
-  notification: GitHubNotificationContext,
+  event: GitHubEventContext,
 ): GitHubWorkflowMatch {
-  if (!workflow.repos.includes(notification.repo)) {
-    return { matched: false, reason: `repo ${notification.repo} not in workflow scope` };
+  if (!workflow.repos.includes(event.repo)) {
+    return { matched: false, reason: `repo ${event.repo} not in workflow scope` };
   }
 
-  if (workflow.subjectTypes && !workflow.subjectTypes.includes(notification.subjectType)) {
+  if (workflow.subjectTypes && !workflow.subjectTypes.includes(event.subjectType)) {
     return {
       matched: false,
-      reason: `subject type ${notification.subjectType} not in workflow scope`,
+      reason: `subject type ${event.subjectType} not in workflow scope`,
     };
   }
 
-  if (notification.actor && workflow.excludeUsers?.includes(notification.actor)) {
-    return { matched: false, reason: `actor ${notification.actor} is excluded` };
+  if (event.actor && workflow.excludeUsers?.includes(event.actor)) {
+    return { matched: false, reason: `actor ${event.actor} is excluded` };
   }
 
   if (workflow.users && workflow.users.length > 0) {
-    if (!notification.actor || !workflow.users.includes(notification.actor)) {
+    if (!event.actor || !workflow.users.includes(event.actor)) {
       return {
         matched: false,
-        reason: notification.actor
-          ? `actor ${notification.actor} not in workflow scope`
-          : 'notification actor missing',
+        reason: event.actor ? `actor ${event.actor} not in workflow scope` : 'event actor missing',
       };
     }
   }

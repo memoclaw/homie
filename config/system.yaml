@@ -11,8 +11,12 @@ provider:
   model: ""
   extraArgs: []
 
-# GitHub workflow polling (scaffolded, not started yet)
+# GitHub webhooks (requires GitHub App + tunnel)
 github:
-  enabled: true
-  pollIntervalSec: 60
+  enabled: false
+  token: ${GITHUB_TOKEN}
   workflowsDir: ./workflows/github
+  webhook:
+    port: 3100
+    path: /webhooks/github
+    secret: ${GITHUB_WEBHOOK_SECRET}
